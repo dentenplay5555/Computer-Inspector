@@ -10,16 +10,12 @@ int main() {
   int stau=gethostname(hn,sizeof(hn));
   col cor;
   while (1) {
-    json j={
-        {"cpu", 23.4},
-        {"dis", {{"use",0000},{"tot",0000},{"per",0000}}},
-        {"ram", {{"used",0000},{"total", 0000},{"oer", 0000}}},
-        {"net", {{"rx",0000},{"tx",0000}}}
-    };
+    auto ms=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    json j;
     std::this_thread::sleep_for(std::chrono::seconds(1));
     stats rev=cor.st();
     j=rev;
-    j["typ"]="metrics"; j["id"]=hn; j["os"]="linux";
+    j["type"]="metrics"; j["id"]=hn; j["os"]="linux"; j["ts"]=ms;
     std::cout<<j.dump()<<'\n';
   }
 }
