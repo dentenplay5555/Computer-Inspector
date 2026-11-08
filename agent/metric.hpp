@@ -13,7 +13,7 @@ struct ct {
 };
 bool recpt(ct&); bool remem(uint64_t&, uint64_t&);
 bool renet(uint64_t&,uint64_t&); bool reds(uint64_t&, uint64_t&);
-void to_json(json&, const stats&); static double round1(double x);
+void to_json(json&, const stats&); 
 class col {
   public: 
     col();
