@@ -44,14 +44,6 @@ stats col::st() {
   if (!rtnev_t){p_rx=rx; p_tx=tx;}
   return stt;
 }
-/*
-struct stats {
-  long double cp_per=0,ra_pe=0,ds_pe=0;
-  uint64_t ra_t=0,ra_us=0;
-  long double ne_rx=0,ne_tx=0;
-  uint64_t ds_us=0,ds_t=0;
-};
-*/
 void to_json(json&j,const stats&s) {
   j={
     {"cpu", round1((double)s.cp_per)},
@@ -63,7 +55,7 @@ void to_json(json&j,const stats&s) {
     },
     {"net", {
         {"rx_kbps",round1((double)s.ne_rx)},
-        {"tx_kbps",round1((double)s.ne_tx)}
+        {"tx_kb",round1((double)s.ne_tx)}
       }
     },
     {"disk",{

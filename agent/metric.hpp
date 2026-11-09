@@ -1,6 +1,6 @@
 #pragma once
 #include <cstdint>
-#include "json.hpp"
+#include "agent/json.hpp"
 using json=nlohmann::json;
 struct stats {
   long double cp_per=0,ra_pe=0,ds_pe=0;

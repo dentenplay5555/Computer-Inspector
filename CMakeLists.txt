@@ -21,6 +21,11 @@ add_executable(agent
     agent/metric.cpp
     agent/linux.cpp
 )
+add_executable(server server/main.cpp)
+target_link_libraries(server PRIVATE ixwebsocket)
+if(WIN32)
+  target_link_libraries(server PRIVATE ws2_32)
+endif()
 target_link_libraries(agent PRIVATE ixwebsocket)
 if(WIN32)
   target_link_libraries(agent PRIVATE iphlpapi ws2_32)
