@@ -55,7 +55,7 @@ void to_json(json&j,const stats&s) {
     },
     {"net", {
         {"rx_kbps",round1((double)s.ne_rx)},
-        {"tx_kb",round1((double)s.ne_tx)}
+        {"tx_kbps",round1((double)s.ne_tx)}
       }
     },
     {"disk",{

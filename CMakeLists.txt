@@ -23,6 +23,8 @@ add_executable(agent
 )
 add_executable(server server/main.cpp)
 target_link_libraries(server PRIVATE ixwebsocket)
+target_include_directories(server PRIVATE ${CMAKE_SOURCE_DIR})
+target_compile_options(server PRIVATE -Wall -Wextra)
 if(WIN32)
   target_link_libraries(server PRIVATE ws2_32)
 endif()

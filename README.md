@@ -30,7 +30,7 @@ Status: `[x]` done, `[ ]` planned.
  
 - [x] Read CPU / RAM / network statistics (Linux)
 - [ ] Read CPU / RAM / network statistics (Windows)
-- [ ] Send statistics to a central server over WebSocket
+- [x] Send statistics to a central server over WebSocket
 - [ ] Teacher dashboard: one card per computer (ok / warning / critical / offline)
 - [ ] Classroom seat map
 - [ ] Stat history and per-machine baseline, to flag abnormal usage
