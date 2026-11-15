@@ -12,6 +12,7 @@
 #include <vector>
 #include <iomanip>
 #include <mutex>
+#include <unordered_set>
 using json=nlohmann::json;
 struct mah {
   std::string id,ip,os;
@@ -20,11 +21,31 @@ struct mah {
 };
 std::mutex g_mu;
 std::map<std::string, mah> g_mah;
+std::unordered_set<const void*> g_dash;
 std::atomic<bool> r{1};
 int64_t now_ms() {return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();}
 void hde(int) {
   std::cout<<"\nStopping...\n";
   r=0;
+}
+const char* stat(const mah&m, int64_t n) {
+  if (n-m.l_s>30000) return "offline";
+  else if (m.cpu>=90||m.ram>=90||m.disk>=95) return "crit";
+  else if (m.cpu>=80||m.ram>=80||m.disk>=85) return "warn";
+  return "ok";
+}
+json b_snp(const std::vector<mah>&snp,int64_t n) {
+  json arr=json::array();
+  for (auto&m:snp) {
+    arr.push_back({
+      {"id",m.id},{"ip",m.ip},{"os",m.os},
+      {"status",stat(m,n)},
+      {"cpu",m.cpu},{"ram",m.ram},{"disk",m.disk},
+      {"rx",m.rx},{"tx",m.tx},
+      {"age",n-m.l_s}
+    });
+  }
+  return {{"type","snapshot"},{"ts",n},{"machines",arr}};
 }
 void hmsg(const std::string&ip, const std::string&txt) {
   try {
@@ -57,12 +78,26 @@ void hmsg(const std::string&ip, const std::string&txt) {
 int main() {
   ix::initNetSystem();
   ix::WebSocketServer wsr(8080,"0.0.0.0");
-  wsr.setOnClientMessageCallback([](std::shared_ptr<ix::ConnectionState> state, ix::WebSocket&,const ix::WebSocketMessagePtr& msg){
+  wsr.setOnClientMessageCallback([](std::shared_ptr<ix::ConnectionState> state, ix::WebSocket&ws,const ix::WebSocketMessagePtr& msg){
     switch (msg->type) {
-      case ix::WebSocketMessageType::Open: std::cout<<"connected: "<<state->getRemoteIp()<<'\n'; break;
-      case ix::WebSocketMessageType::Close: std::cout<<"Disconnecting...\n"; break;
-      case ix::WebSocketMessageType::Error: std::cerr<<"An error has occur: "<<msg->errorInfo.reason<<'\n'; break;
-      case ix::WebSocketMessageType::Message: hmsg(state->getRemoteIp(),msg->str); break;
+      case ix::WebSocketMessageType::Open:
+        if (msg->openInfo.uri=="/dashboard") {
+          {std::lock_guard<std::mutex> lock(g_mu); g_dash.insert(&ws);}
+        }
+        std::cout<<"connected: "<<state->getRemoteIp()<<'\n';
+        break;
+      case ix::WebSocketMessageType::Close: 
+        {std::lock_guard<std::mutex> lock(g_mu); g_dash.erase(&ws);}
+        std::cout<<"Disconnecting...\n";
+        break;
+      case ix::WebSocketMessageType::Error: 
+        std::cerr<<"An error has occur: "<<msg->errorInfo.reason<<'\n'; 
+        break;
+      case ix::WebSocketMessageType::Message:
+        bool is_d;
+        {std::lock_guard<std::mutex> lock(g_mu); is_d=g_dash.count(&ws)>0;}
+        if (!is_d) hmsg(state->getRemoteIp(),msg->str);
+        break;
       default: break;
     }
   });
@@ -78,15 +113,19 @@ int main() {
     std::this_thread::sleep_for(std::chrono::seconds(1));
     if (!r) break;
     std::vector<mah> snp;
-    {
+    { 
       std::lock_guard<std::mutex> lock(g_mu);
       for (auto &[id,m] : g_mah) snp.push_back(m);
     }
     std::cout<<std::left<<std::setw(16)<<"ID"<<std::setw(9)<<"STATUS"<<std::right<<std::setw(7)<<"CPU%"<<std::setw(7)<<"RAM%"<<std::setw(7)<<"DISK%"<<std::setw(8)<<"RX(kb)"<<std::setw(7)<<"TX(kb)"<<'\n';
     int64_t n=now_ms();
+    std::string pl=b_snp(snp,n).dump();
+    {
+      std::lock_guard<std::mutex> lock(g_mu);
+      for (const auto&c:wsr.getClients()) if (g_dash.count(c.get()))c->send(pl);
+    }
     for (const auto&m:snp) {
-      bool o=n-m.l_s>30000;
-      std::cout<<std::left<<std::setw(16)<<m.id<<std::setw(9)<<(o ? "OFFLINE" : "ok")<<std::right<<std::fixed<<std::setprecision(1)<<std::setw(7)<<m.cpu<<std::setw(7)<<m.ram<<std::setw(7)<<m.disk<<std::setw(7)<<m.rx<<std::setw(7)<<m.tx<<'\n';
+      std::cout<<std::left<<std::setw(16)<<m.id<<std::setw(9)<<stat(m,n)<<std::right<<std::fixed<<std::setprecision(1)<<std::setw(7)<<m.cpu<<std::setw(7)<<m.ram<<std::setw(7)<<m.disk<<std::setw(7)<<m.rx<<std::setw(7)<<m.tx<<'\n';
     }
     std::cout<<"----\n";
   }
