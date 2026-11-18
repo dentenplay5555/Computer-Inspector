@@ -13,16 +13,58 @@
 #include <iomanip>
 #include <mutex>
 #include <unordered_set>
+#include <sstream>
+#include <fstream>
+#include <ixwebsocket/IXHttpServer.h>
+#include <ifaddrs.h>
+#include <arpa/inet.h>
+#include <net/if.h>
+#include <filesystem>
+#include <stdexcept>
+#include <cmath>
 using json=nlohmann::json;
 struct mah {
   std::string id,ip,os;
   double cpu=0,ram=0,disk=0,rx=0,tx=0;
   int64_t l_s=0;
 };
+struct netif {
+  std::string net_inter;
+  std::string net_ip;
+};
 std::mutex g_mu;
 std::map<std::string, mah> g_mah;
 std::unordered_set<const void*> g_dash;
 std::atomic<bool> r{1};
+std::string pi="localhost";
+netif ipvfour() {
+  struct ifaddrs *inter=nullptr;
+  if (getifaddrs(&inter)==-1) throw std::runtime_error("getifadr failed");
+  netif rst;
+  for (auto *ifa=inter; ifa!=nullptr; ifa=ifa->ifa_next) {
+    if (!ifa->ifa_addr) continue;
+    if (ifa->ifa_addr->sa_family!=AF_INET) continue;
+    if (!(ifa->ifa_flags&IFF_UP)) continue;
+    if ((ifa->ifa_flags&IFF_LOOPBACK)) continue;
+    std::string ne=ifa->ifa_name;
+    std::string ph="/sys/class/net/"+ne+"/wireless";
+    if (!std::filesystem::exists(ph))continue;
+    char ip[INET_ADDRSTRLEN];
+    auto *addr=reinterpret_cast<sockaddr_in*>(ifa->ifa_addr);
+    if(!inet_ntop(AF_INET,&addr->sin_addr,ip,sizeof(ip)))continue;
+    rst.net_inter=ne;
+    rst.net_ip=ip;
+    break;
+  }
+  freeifaddrs(inter);
+  return rst;
+}
+std::string read_f(const std::string&pth) {
+  std::ifstream f(pth,std::ios::binary);
+  std::stringstream ss;
+  ss<<f.rdbuf();
+  return ss.str();
+}
 int64_t now_ms() {return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();}
 void hde(int) {
   std::cout<<"\nStopping...\n";
@@ -62,6 +104,8 @@ void hmsg(const std::string&ip, const std::string&txt) {
     double disk=0;
     if (j.contains("disk")&&j["disk"].is_object())disk=j["disk"].value("per",0.0);
     std::string os=j.value("os","");
+    if (!std::isfinite(cpu) || !std::isfinite(ram) || !std::isfinite(disk) || !std::isfinite(rx) || !std::isfinite(tx))return;
+    if (cpu<0 || cpu>100 || ram<0 || ram>100 || disk<0 || disk>100 || rx<0 || tx<0) return;
     std::lock_guard<std::mutex> lock(g_mu);
     mah&m=g_mah[id];
     m.id=id;
@@ -78,6 +122,11 @@ void hmsg(const std::string&ip, const std::string&txt) {
 int main() {
   ix::initNetSystem();
   ix::WebSocketServer wsr(8080,"0.0.0.0");
+  netif rst=ipvfour();
+  std::cout<<std::string(40,'=')<<"\nSERVER LOG\nUsing Network config: \n";
+  if (rst.net_ip.empty()){std::cerr<<"Error: Network IPv4 not found\n";return 1;}
+  pi=rst.net_ip;
+  std::cout<<"Network interface: "<<rst.net_inter<<"\nLocal ip: "<<pi<<'\n';
   wsr.setOnClientMessageCallback([](std::shared_ptr<ix::ConnectionState> state, ix::WebSocket&ws,const ix::WebSocketMessagePtr& msg){
     switch (msg->type) {
       case ix::WebSocketMessageType::Open:
@@ -96,7 +145,7 @@ int main() {
       case ix::WebSocketMessageType::Message:
         bool is_d;
         {std::lock_guard<std::mutex> lock(g_mu); is_d=g_dash.count(&ws)>0;}
-        if (!is_d) hmsg(state->getRemoteIp(),msg->str);
+        if (!is_d) hmsg(state->getRemoteIp(),msg->str); 
         break;
       default: break;
     }
@@ -107,15 +156,36 @@ int main() {
     std::cerr<<"Error: "<<rc.second<<'\n';
     return 1;
   }
-  wsr.start();
   std::cout<<"Starting server...\n";
+  wsr.start();
+  std::cout<<"Server can recv client now...\n";
+  ix::HttpServer http(8081,"0.0.0.0");
+  http.setOnConnectionCallback(
+    [](ix::HttpRequestPtr rq,std::shared_ptr<ix::ConnectionState>)->ix::HttpResponsePtr {
+      ix::WebSocketHttpHeaders head;
+      if (rq->uri=="/"||rq->uri=="/index.html") {
+        std::string by=read_f("dashboard/index.html");
+        if (!by.empty()) {
+          head["Content-Type"]="text/html; charset=utf-8";
+          return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,by);
+        }
+      }
+      std::string nf="Not Found";
+      head["Content-Type"]="text/html; charset=utf-8";
+      return std::make_shared<ix::HttpResponse>(404,"Not Found",ix::HttpErrorCode::Ok,head,nf);
+    }
+  );
+  auto hr=http.listen();
+  if (!hr.first){ std::cerr<<"HTTP error: "<<hr.second<<'\n';return 1;}
+  http.start();
+  std::cout<<"Server is now serving web page vist: http://"<<pi<<":8081\n";
   while (r) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
     if (!r) break;
     std::vector<mah> snp;
     { 
       std::lock_guard<std::mutex> lock(g_mu);
-      for (auto &[id,m] : g_mah) snp.push_back(m);
+      for (auto &[id,m] : g_mah)   snp.push_back(m);
     }
     std::cout<<std::left<<std::setw(16)<<"ID"<<std::setw(9)<<"STATUS"<<std::right<<std::setw(7)<<"CPU%"<<std::setw(7)<<"RAM%"<<std::setw(7)<<"DISK%"<<std::setw(8)<<"RX(kb)"<<std::setw(7)<<"TX(kb)"<<'\n';
     int64_t n=now_ms();
@@ -129,6 +199,7 @@ int main() {
     }
     std::cout<<"----\n";
   }
+  http.stop();
   wsr.stop();
   ix::uninitNetSystem();
   return 0;

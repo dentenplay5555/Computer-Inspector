@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <title>Computer Inspector</title>
+  <style>
+    body { 
+      font-family: system-ui, sans-serif; 
+      background: #f4f5f7; margin: 16px; 
+    }
+    #grid { 
+      display: grid; 
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); 
+      gap: 12px; 
+    }
+    .card { 
+      background: #fff; 
+      border-radius: 10px; 
+      padding: 12px 14px;
+      border-left: 6px solid gray; 
+    }
+    .card.ok { 
+      border-left-color: #1f9d55; 
+    }
+    .card.warn { 
+      border-left-color: #d98e04; 
+    }
+    .card.crit { 
+      border-left-color: #d6342c; 
+    }
+    .card.offline {
+      opacity: .5; 
+    }
+    .top {
+      display: flex; 
+      justify-content: space-between; 
+      margin-bottom: 8px; }
+    .name { 
+      font-weight: 600; 
+    }
+    .sub { 
+      font-size: 12px; 
+      color: #666; 
+    }
+    .row { 
+      display: grid; 
+     grid-template-columns: 42px 1fr 48px; 
+      gap: 8px;
+      align-items: center; 
+      font-size: 12px; 
+      margin: 5px 0; 
+    }
+    .bar { 
+      height: 7px; background: #e3e6ec; 
+      border-radius: 4px; 
+      overflow: hidden; 
+    }
+    .bar i { 
+      display: block; 
+      height: 100%; 
+      background: #2f6fed; 
+    }
+    .na {
+      border: ;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">กำลังเชื่อมต่อ...</div>
+  <div id="ovall"></div>
+  <div id="grid"></div>
+  <script>
+  const esc = (s) => String(s).replace(/[&<>"']/g,c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  function connect() {
+    const hn = location.hostname || "127.0.0.1";
+    const ws = new WebSocket("ws://" + hn + ":8080/dashboard");
+    const label = { ok: "ปกติ", warn: "เฝ้าระวัง", crit: "วิกฤต", offline: "ออฟไลน์" };
+    const bar = (label, v) => {
+      const p=Math.min(100,Math.max(0,Number(v)));
+      return `<div class="row"><span>${label}</span>
+              <div class="bar"><i style="width:${p}%"></i></div>
+              <span>${p.toFixed(0)}%</span></div>`;
+    };
+    ws.onopen = () => {
+      document.getElementById("status").textContent = "เชื่อมต่อแล้ว";
+    };
+    ws.onmessage = (e) => {
+      const dt = JSON.parse(e.data);
+      dt.machines.sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
+      let arr={ok: 0, warn: 0, crit: 0,offline: 0};
+      for (const m of dt.machines) arr[m.status]++;
+      let crd = dt.machines.map(m=>` <div class="card ${m.status}">
+        <div class="top">
+          <span class="name">${esc(m.id)}</span>
+          <span class="sub">${esc(m.ip)} status: ${label[m.status]}</span>
+          </div>
+          ${bar("CPU", m.cpu)}
+          ${bar("RAM", m.ram)}
+          ${bar("DISK", m.disk)}
+        <div class="sub">↓ ${Number(m.rx).toFixed(1)} KB/s &nbsp; ↑ ${Number(m.tx).toFixed(1)} KB/s</div>
+      </div>`).join("");
+      const ovl=Object.keys(label).map(k=>`${label[k]} ${arr[k]}`).join(" : ");
+      if (dt.machines.length===0) crd=`<p class="na">No Available PC yet</p>`;
+      document.getElementById("ovall").innerHTML=ovl;
+      document.getElementById("grid").innerHTML = crd;
+    };
+    ws.onclose = () => {
+      document.getElementById("status").textContent = "หลุดการเชื่อมต่อ กำลังต่อใหม่...";
+      setTimeout(connect, 2000);
+    };
+
+  }
+  connect();
+</script>
+</body>
+</html>
