@@ -5,6 +5,7 @@
 #include <string>
 #include <sys/statvfs.h>
 #include "metric.hpp"
+#include <unistd.h>
 bool recpt(ct &ou) {
   std::ifstream f("/proc/stat");
   std::string l,aa;
@@ -67,3 +68,4 @@ bool reds(uint64_t &t,uint64_t &av) {
   av=(uint64_t)s.f_bavail*s.f_frsize;
   return 0;
 }
+int ghn(char* hon,size_t sohn) {return gethostname(hon,sohn);}

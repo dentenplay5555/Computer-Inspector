@@ -14,23 +14,38 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+if(WIN32)
+  set(AGENT_PLATFORM  agent/windows.cpp)
+  set(SERVER_PLATFORM server/netinfo_win32.cpp)
+else()
+  set(AGENT_PLATFORM  agent/linux.cpp)
+  set(SERVER_PLATFORM server/netinfo_linux.cpp)
 endif()
 add_executable(agent
-    agent/main.cpp
-    agent/metric.cpp
-    agent/linux.cpp
+  agent/main.cpp
+  agent/metric.cpp
+  ${AGENT_PLATFORM}
 )
-add_executable(server server/main.cpp)
+target_link_libraries(agent PRIVATE ixwebsocket)
+target_include_directories(agent PRIVATE ${CMAKE_SOURCE_DIR})
+target_compile_options(agent PRIVATE -Wall -Wextra)
+if(WIN32)
+  target_link_libraries(agent PRIVATE iphlpapi ws2_32)
+endif()
+
+add_executable(server 
+  server/main.cpp
+  ${SERVER_PLATFORM}
+)
 target_link_libraries(server PRIVATE ixwebsocket)
 target_include_directories(server PRIVATE ${CMAKE_SOURCE_DIR})
 target_compile_options(server PRIVATE -Wall -Wextra)
 if(WIN32)
-  target_link_libraries(server PRIVATE ws2_32)
+  target_link_libraries(server PRIVATE iphlpapi ws2_32)
 endif()
-target_link_libraries(agent PRIVATE ixwebsocket)
-if(WIN32)
-  target_link_libraries(agent PRIVATE iphlpapi ws2_32)
+if (MINGW)
+  target_compile_options(agent PRIVATE -static)
+  target_compile_options(server PRIVATE -static)
 endif()
-target_include_directories(agent PRIVATE ${CMAKE_SOURCE_DIR})
-target_compile_options(agent PRIVATE -Wall -Wextra)

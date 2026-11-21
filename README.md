@@ -31,7 +31,7 @@ Status: `[x]` done, `[ ]` planned.
 - [x] Read CPU / RAM / network statistics (Linux)
 - [ ] Read CPU / RAM / network statistics (Windows)
 - [x] Send statistics to a central server over WebSocket
-- [ ] Teacher dashboard: one card per computer (ok / warning / critical / offline)
+- [x] Teacher dashboard: one card per computer (ok / warning / critical / offline)
 - [ ] Classroom seat map
 - [ ] Stat history and per-machine baseline, to flag abnormal usage
 - [ ] Grouped alerts (e.g. a whole row goes offline → likely a switch problem)
@@ -58,9 +58,9 @@ docs/        API reference and test notes
 Requirements: a C++17 compiler and CMake.
  
 ```
-cmake -S . -B build
-cmake --build build
-./build/agent
+cmake -S . -B build #this section is optional but required to for first time you do this
+cmake --build build #<--target <server/agent> (This section is optional: default is agent) >
+./build/agent #or you can use ./build/server if you compiled server source code
 ```
  
 ## Privacy

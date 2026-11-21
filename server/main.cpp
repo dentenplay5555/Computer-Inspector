@@ -16,49 +16,21 @@
 #include <sstream>
 #include <fstream>
 #include <ixwebsocket/IXHttpServer.h>
-#include <ifaddrs.h>
-#include <arpa/inet.h>
-#include <net/if.h>
 #include <filesystem>
 #include <stdexcept>
 #include <cmath>
+#include "netinfo.hpp"
 using json=nlohmann::json;
 struct mah {
   std::string id,ip,os;
   double cpu=0,ram=0,disk=0,rx=0,tx=0;
   int64_t l_s=0;
 };
-struct netif {
-  std::string net_inter;
-  std::string net_ip;
-};
 std::mutex g_mu;
 std::map<std::string, mah> g_mah;
 std::unordered_set<const void*> g_dash;
 std::atomic<bool> r{1};
-std::string pi="localhost";
-netif ipvfour() {
-  struct ifaddrs *inter=nullptr;
-  if (getifaddrs(&inter)==-1) throw std::runtime_error("getifadr failed");
-  netif rst;
-  for (auto *ifa=inter; ifa!=nullptr; ifa=ifa->ifa_next) {
-    if (!ifa->ifa_addr) continue;
-    if (ifa->ifa_addr->sa_family!=AF_INET) continue;
-    if (!(ifa->ifa_flags&IFF_UP)) continue;
-    if ((ifa->ifa_flags&IFF_LOOPBACK)) continue;
-    std::string ne=ifa->ifa_name;
-    std::string ph="/sys/class/net/"+ne+"/wireless";
-    if (!std::filesystem::exists(ph))continue;
-    char ip[INET_ADDRSTRLEN];
-    auto *addr=reinterpret_cast<sockaddr_in*>(ifa->ifa_addr);
-    if(!inet_ntop(AF_INET,&addr->sin_addr,ip,sizeof(ip)))continue;
-    rst.net_inter=ne;
-    rst.net_ip=ip;
-    break;
-  }
-  freeifaddrs(inter);
-  return rst;
-}
+std::string pi="<localhost ip>";
 std::string read_f(const std::string&pth) {
   std::ifstream f(pth,std::ios::binary);
   std::stringstream ss;
@@ -124,7 +96,7 @@ int main() {
   ix::WebSocketServer wsr(8080,"0.0.0.0");
   netif rst=ipvfour();
   std::cout<<std::string(40,'=')<<"\nSERVER LOG\nUsing Network config: \n";
-  if (rst.net_ip.empty()){std::cerr<<"Error: Network IPv4 not found\n";return 1;}
+  if (rst.net_ip.empty()){std::cerr<<"Error: Network IPv4 not found\n";}
   pi=rst.net_ip;
   std::cout<<"Network interface: "<<rst.net_inter<<"\nLocal ip: "<<pi<<'\n';
   wsr.setOnClientMessageCallback([](std::shared_ptr<ix::ConnectionState> state, ix::WebSocket&ws,const ix::WebSocketMessagePtr& msg){

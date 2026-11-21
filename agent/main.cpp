@@ -3,27 +3,34 @@
 #include <chrono>
 #include <atomic>
 #include <csignal>
-#include <unistd.h>
 #include <cstring>
 #include <ixwebsocket/IXNetSystem.h>
 #include <ixwebsocket/IXWebSocket.h>
 #include "metric.hpp"
 #include <string>
+#include <stdexcept>
+#ifdef _WIN32
+  constexpr char* const osname="windows";
+#else 
+  constexpr char* const osname="linux";
+#endif
 using json=nlohmann::json;
 std::atomic<bool> r{1};
-void hde(int) {
-  std::cout<<"Stopping agent...\n";
-  r=0;
-}
+void hde(int) {r=0;}
 int main(int argc, char *argv[]) {
   char hn[200+200];
-  int stau=gethostname(hn,sizeof(hn));
+  ix::initNetSystem();
+  ix::WebSocket ws;
+  int stau=ghn(hn,sizeof(hn));
   if (stau!=0) std::strcpy(hn, "unknown");
   std::signal(SIGINT, hde);
   std::string id=hn,port="8080",host="127.0.0.1",surl;
   for (int i=1;i<argc;i++) {
     if (std::string(argv[i])=="--server"&&i+1<argc) surl=argv[++i];
-    else if (std::string(argv[i])=="--id"&&i+1<argc)id=argv[++i];
+    else if (std::string(argv[i])=="--id"&&i+1<argc) {
+      if (std::strlen(argv[i+1])<=100)id=argv[++i];
+      else std::cerr<<"id too long using "<<id<<" as id\n";
+    }
     else if (std::string(argv[i])=="--port"&&i+1<argc) {
       try {
         int p=std::stoi(argv[++i]);
@@ -37,8 +44,6 @@ int main(int argc, char *argv[]) {
     else if (std::string(argv[i])=="--host"&&i+1<argc) host=argv[++i];
   }
   std::string url=surl.empty() ? "ws://"+host+":"+port+"/agent" : surl;
-  ix::initNetSystem();
-  ix::WebSocket ws;
   ws.setUrl(url);
   ws.setPingInterval(10);
   ws.setOnMessageCallback([](const ix::WebSocketMessagePtr& msg){
@@ -64,11 +69,17 @@ int main(int argc, char *argv[]) {
     auto ms=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count(); 
     json j; 
     j=rev;
-    j["type"]="metrics"; j["id"]=id; j["os"]="linux"; j["ts"]=ms;
-    std::string jd=j.dump();
-    std::cout<<jd<<'\n';
-    ws.send(jd);
+    j["type"]="metrics"; j["id"]=id; j["os"]=osname; j["ts"]=ms;
+    try {
+      std::string jd=j.dump(-1,' ',false,json::error_handler_t::replace);
+      std::cout<<jd<<'\n';
+      auto send_stau=ws.send(jd);
+      if (!send_stau.success) std::cerr<<"WS: failed to send message "<<(send_stau.compressionError ? "compression error\n" : "Either agent is disconnected or socket error\n");
+    } catch (const json::exception&e) {
+      std::cerr<<"JSON error: "<<e.what()<<'\n';
+    }
   }
+  std::cerr<<"Stopping agent...\n";
   ws.stop();
   ix::uninitNetSystem();
   return 0;

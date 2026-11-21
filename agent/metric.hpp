@@ -13,6 +13,7 @@ struct ct {
 };
 bool recpt(ct&); bool remem(uint64_t&, uint64_t&);
 bool renet(uint64_t&,uint64_t&); bool reds(uint64_t&, uint64_t&);
+int ghn(char* hon,size_t sohn);
 void to_json(json&, const stats&); 
 class col {
   public: 
