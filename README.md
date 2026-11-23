@@ -29,7 +29,7 @@ behaves abnormally, so it can be checked.
 Status: `[x]` done, `[ ]` planned.
  
 - [x] Read CPU / RAM / network statistics (Linux)
-- [ ] Read CPU / RAM / network statistics (Windows)
+- [x] Read CPU / RAM / network statistics (Windows)
 - [x] Send statistics to a central server over WebSocket
 - [x] Teacher dashboard: one card per computer (ok / warning / critical / offline)
 - [ ] Classroom seat map

@@ -4,6 +4,7 @@ include(FetchContent)
 set(USE_TLS  OFF CACHE BOOL "" FORCE)
 set(USE_ZLIB OFF CACHE BOOL "" FORCE)
 set(USE_TEST OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(ixwebsocket
   GIT_REPOSITORY https://github.com/machinezone/IXWebSocket.git
   GIT_TAG        v11.4.5
@@ -46,6 +47,6 @@ if(WIN32)
   target_link_libraries(server PRIVATE iphlpapi ws2_32)
 endif()
 if (MINGW)
-  target_compile_options(agent PRIVATE -static)
-  target_compile_options(server PRIVATE -static)
+  target_link_options(agent  PRIVATE -static)
+  target_link_options(server PRIVATE -static)
 endif()

@@ -161,13 +161,17 @@ int main() {
     }
     std::cout<<std::left<<std::setw(16)<<"ID"<<std::setw(9)<<"STATUS"<<std::right<<std::setw(7)<<"CPU%"<<std::setw(7)<<"RAM%"<<std::setw(7)<<"DISK%"<<std::setw(8)<<"RX(kb)"<<std::setw(7)<<"TX(kb)"<<'\n';
     int64_t n=now_ms();
-    std::string pl=b_snp(snp,n).dump();
-    {
+    try {
+      std::string pl=b_snp(snp,n).dump(-1,' ',false,json::error_handler_t::replace);
+      {
       std::lock_guard<std::mutex> lock(g_mu);
-      for (const auto&c:wsr.getClients()) if (g_dash.count(c.get()))c->send(pl);
-    }
-    for (const auto&m:snp) {
-      std::cout<<std::left<<std::setw(16)<<m.id<<std::setw(9)<<stat(m,n)<<std::right<<std::fixed<<std::setprecision(1)<<std::setw(7)<<m.cpu<<std::setw(7)<<m.ram<<std::setw(7)<<m.disk<<std::setw(7)<<m.rx<<std::setw(7)<<m.tx<<'\n';
+        for (const auto&c:wsr.getClients()) if (g_dash.count(c.get()))c->send(pl);
+      }
+      for (const auto&m:snp) {
+        std::cout<<std::left<<std::setw(16)<<m.id<<std::setw(9)<<stat(m,n)<<std::right<<std::fixed<<std::setprecision(1)<<std::setw(7)<<m.cpu<<std::setw(7)<<m.ram<<std::setw(7)<<m.disk<<std::setw(7)<<m.rx<<std::setw(7)<<m.tx<<'\n';
+      }
+    } catch (const json::exception&e) {
+      std::cerr<<"JSON EXCEPTION ERROR: "<<e.what()<<'\n';
     }
     std::cout<<"----\n";
   }

@@ -40,7 +40,7 @@ bool remem(uint64_t &t,uint64_t &av) {
 bool renet(uint64_t &rx,uint64_t &tx) {
   rx=0,tx=0;
   std::ifstream f("/proc/net/dev");
-  if (!f) {std::cerr<<"Error: Cannot read proc/net/dev file is nowhere to be found or unable to read\n";return 1;}
+  if (!f) {std::cerr<<"Error: Cannot read /proc/net/dev file is nowhere to be found or unable to read\n";return 1;}
   std::string l;
   for (int i=0;i<2;i++)std::getline(f,l);
   while (std::getline(f,l)) {

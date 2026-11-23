@@ -10,9 +10,9 @@
 #include <string>
 #include <stdexcept>
 #ifdef _WIN32
-  constexpr char* const osname="windows";
+  constexpr const char* osname="windows";
 #else 
-  constexpr char* const osname="linux";
+  constexpr const char* const osname="linux";
 #endif
 using json=nlohmann::json;
 std::atomic<bool> r{1};
