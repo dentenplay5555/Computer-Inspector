@@ -53,6 +53,19 @@ dashboard/   web page for the teacher
 docs/        API reference and test notes
 ```
  
+## Quick start
+
+One script builds everything, starts the server and opens the dashboard:
+
+```
+./run.sh            # Mac / Linux
+run.bat             # Windows
+```
+
+Add `--agent` to also start an agent on the same computer (handy for testing without
+other PCs). `./run.sh --help` lists the other options. Ctrl+C stops everything on
+Mac / Linux; on Windows, close the server window.
+
 ## Build
  
 Requirements: a C++17 compiler and CMake.
