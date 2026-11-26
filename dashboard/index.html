@@ -270,6 +270,20 @@
     .edhint { color: var(--muted); font-size: 14px; margin: 10px 0 0; }
     #ed-msg { min-height: 1.5em; margin: 4px 0 10px; font-size: 14px; color: var(--muted); }
     #ed-msg.bad { color: var(--crit); font-weight: 600; }
+    /* asked in the page, not with confirm(): some browsers block or auto-answer dialogs */
+    .edask {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+      margin-top: 10px;
+      padding: 10px 14px;
+      background: var(--warn-bg);
+      border: 1px solid var(--warn-line);
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .edask span { margin-right: auto; }
     .room.ed .cell { border: 1px dashed var(--off-line); border-radius: 10px; }
     .blk {
       position: relative;
@@ -404,7 +418,7 @@
       noRoom: "ไม่มีช่องว่างเหลือ เพิ่มคอลัมน์หรือแถวก่อน",
       noFit: "วางตรงนั้นไม่ได้: ชนบล็อกอื่นหรือเกินขอบห้อง",
       idTaken: "รหัสนี้อยู่ในผังแล้ว", textEmpty: "ใส่ข้อความบนป้าย หรือลบป้ายนี้ออก", idEmpty: "ต้องใส่รหัสเครื่อง", idLong: "รหัสเครื่องยาวเกิน 64 ตัวอักษร",
-      discard: "ทิ้งการแก้ไขที่ยังไม่ได้บันทึก?",
+      discard: "ทิ้งการแก้ไขที่ยังไม่ได้บันทึก?", discardYes: "ทิ้งการแก้ไข", keep: "แก้ไขต่อ",
     },
     en: {
       subtitle: "Teacher dashboard", cards: "Cards", map: "Room map",
@@ -443,7 +457,7 @@
       noRoom: "No free cell left. Add a column or a row first",
       noFit: "Cannot go there: it overlaps another block or leaves the room",
       idTaken: "That ID is already in the map", textEmpty: "Type the label text, or remove the label", idEmpty: "Type a computer ID", idLong: "Computer IDs can be at most 64 characters",
-      discard: "Discard the changes you have not saved?",
+      discard: "Discard the changes you have not saved?", discardYes: "Discard changes", keep: "Keep editing",
     },
   };
   const STATES = ["ok", "warn", "crit", "offline"];
@@ -637,8 +651,13 @@
     render();
     $("ed-addlb").focus();
   }
-  function edStop() {
-    if (ed && ed.dirty && !confirm(t().discard)) return;
+  function edStop(force) {
+    if (!ed) return;
+    if (ed.dirty && !force) {           // ask first; "Keep editing" is the safe default
+      $("ed-ask").hidden = false;
+      $("ed-keep").focus();
+      return;
+    }
     ed = null; drag = null;
     render();
     $("edopen").focus();
@@ -701,6 +720,11 @@
           <button type="button" class="btn primary" id="ed-save">${esc(T.save)}</button>
         </div>
       </div>
+      <div class="edask" id="ed-ask" role="group" aria-labelledby="ed-askq" hidden>
+        <span id="ed-askq">${esc(T.discard)}</span>
+        <button type="button" class="btn" id="ed-keep">${esc(T.keep)}</button>
+        <button type="button" class="btn danger" id="ed-discard">${esc(T.discardYes)}</button>
+      </div>
       <p class="edhint">${esc(T.edHint)}</p>
       <p id="ed-msg" role="status" aria-live="polite"></p>
       <div class="mapwrap"><div class="front">${esc(T.front)}</div>
@@ -726,8 +750,13 @@
       else if (b.id === "ed-r+") edResizeRoom(0, 1);
       else if (b.id === "ed-addlb") edAddLabel();
       else if (b.id === "ed-dl") edDownload();
-      else if (b.id === "ed-cancel") edStop();
+      else if (b.id === "ed-cancel") edStop(false);
       else if (b.id === "ed-save") edSave();
+    });
+    $("ed-discard").addEventListener("click", () => edStop(true));
+    $("ed-keep").addEventListener("click", () => { $("ed-ask").hidden = true; $("ed-cancel").focus(); });
+    $("ed-ask").addEventListener("keydown", e => {
+      if (e.key === "Escape") { e.preventDefault(); $("ed-ask").hidden = true; $("ed-cancel").focus(); }
     });
     $("ed-tray").addEventListener("click", e => {
       const b = e.target.closest("button[data-add]");
@@ -749,6 +778,7 @@
     const act = document.activeElement;
     const actBlk = act && act.classList && act.classList.contains("blk");
     const actId = act && act.id;
+    $("ed-ask").hidden = true;
     $("ed-cv").textContent = ed.cols;
     $("ed-rv").textContent = ed.rows;
     let h = "";
