@@ -1,0 +1,22 @@
+Third-party components used by Computer Inspector
+==================================================
+
+IXWebSocket (https://github.com/machinezone/IXWebSocket)
+  License: BSD 3-Clause. Used by agent, server, server_gui.
+
+nlohmann/json (agent/json.hpp, https://github.com/nlohmann/json)
+  License: MIT.
+
+Dear ImGui (https://github.com/ocornut/imgui)
+  License: MIT. Used by server_gui.
+
+GLFW (https://github.com/glfw/glfw)
+  License: zlib/libpng. Used by server_gui.
+
+Noto Sans and Noto Sans Thai (https://github.com/notofonts)
+  Copyright 2022 The Noto Project Authors.
+  License: SIL Open Font License 1.1 (https://openfontlicense.org).
+  Embedded in the server_gui binary.
+
+The full license texts ship with each project's source; the fonts' license is at the
+URL above and must accompany any redistributed server_gui binary.
