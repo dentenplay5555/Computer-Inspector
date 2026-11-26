@@ -98,7 +98,7 @@ static std::string fmt_layout(const json&j) {
 static bool is_loopback(const std::string&ip) {
   return ip=="::1"||ip.rfind("127.",0)==0||ip.rfind("::ffff:127.",0)==0;
 }
-static json b_snp(const std::vector<mah>&snp,int64_t n,const history&h) {
+static json b_snp(const std::vector<mah>&snp,const std::vector<core::removed_pc>&rm,int64_t n,const history&h) {
   json arr=json::array();
   for (auto&m:snp) {
     arr.push_back({
@@ -108,10 +108,13 @@ static json b_snp(const std::vector<mah>&snp,int64_t n,const history&h) {
       {"rx",m.rx},{"tx",m.tx},
       {"age",n-m.l_s},
       {"abn",h.abnormal(m.id,n)},
-      {"learn",h.learning(m.id,n)}
+      {"learn",h.learning(m.id,n)},
+      {"name",m.name},{"desc",m.desc}
     });
   }
-  return {{"type","snapshot"},{"ts",n},{"machines",arr}};
+  json ra=json::array();
+  for (auto&r:rm) ra.push_back({{"id",r.id},{"name",r.name}});
+  return {{"type","snapshot"},{"ts",n},{"machines",arr},{"removed",ra}};
 }
 
 core::core()=default;
@@ -139,6 +142,7 @@ void core::hmsg(const std::string&ip,const std::string&txt) {
     int64_t now=now_ms();
     {
     std::lock_guard<std::mutex> lock(mu_);
+    if (removed_.count(id)) return;    // removed on the dashboard: ignored until added back
     mah&m=mah_[id];
     m.id=id;
     m.ip=ip;
@@ -156,6 +160,7 @@ void core::hmsg(const std::string&ip,const std::string&txt) {
 
 bool core::start(std::string&err) {
   if (run_) return true;
+  if (!meta_loaded_) {load_meta(); meta_loaded_=true;}
   if (!hist_) {
     hist_=std::make_unique<history>(hist);
     size_t pts=hist_->load();
@@ -210,21 +215,34 @@ bool core::start(std::string&err) {
   http_->setOnConnectionCallback(
     [this](ix::HttpRequestPtr rq,std::shared_ptr<ix::ConnectionState> state)->ix::HttpResponsePtr {
       ix::WebSocketHttpHeaders head;
-      // Removing an offline computer from the dashboard. Allowed from any PC: only offline
-      // computers can go, and they come back as soon as their agent reports again.
-      if (rq->uri=="/forget"&&rq->method=="POST") {
+      // Can this browser manage computers (rename, describe, remove, add back)?
+      if (rq->uri=="/me"&&rq->method=="GET") {
+        head["Content-Type"]="application/json";
+        head["Cache-Control"]="no-store";
+        return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,json{{"local",is_local(state->getRemoteIp())}}.dump());
+      }
+      // Managing computers from the dashboard. Only from the server computer: the dashboard has
+      // no login, and a student must not be able to hide or rename their own PC.
+      if ((rq->uri=="/forget"||rq->uri=="/restore"||rq->uri=="/meta")&&rq->method=="POST") {
         head["Content-Type"]="application/json";
         head["Cache-Control"]="no-store";
         auto reply=[&](int code,const char*msg,const json&body){
           return std::make_shared<ix::HttpResponse>(code,msg,ix::HttpErrorCode::Ok,head,body.dump(-1,' ',false,json::error_handler_t::replace));
         };
+        if (!is_local(state->getRemoteIp())) return reply(403,"Forbidden",{{"error","local only"}});
         auto ct=rq->headers.find("Content-Type");
         if (ct==rq->headers.end()||ct->second.rfind("application/json",0)!=0) return reply(415,"Unsupported Media Type",{{"error","needs application/json"}});
         json j=json::parse(rq->body,nullptr,false);
         if (j.is_discarded()||!j.is_object()||!j.contains("id")||!j["id"].is_string()) return reply(400,"Bad Request",{{"error","needs {\"id\": \"...\"}"}});
-        std::string why=forget(j["id"].get<std::string>());
+        std::string id=j["id"].get<std::string>(), why;
+        if (rq->uri=="/forget") why=forget(id);
+        else if (rq->uri=="/restore") why=restore(id);
+        else {
+          auto str=[&](const char*k){return j.contains(k)&&j[k].is_string()?j[k].get<std::string>():std::string();};
+          why=set_meta(id,str("name"),str("desc"));
+        }
         if (why=="unknown") return reply(404,"Not Found",{{"error","unknown id"}});
-        if (why=="online") return reply(409,"Conflict",{{"error","still sending data"}});
+        if (!why.empty()) return reply(400,"Bad Request",{{"error",why}});
         return reply(200,"OK",{{"ok",true}});
       }
       // Saving the seat map from the dashboard's editor. Only from the server computer:
@@ -236,7 +254,7 @@ bool core::start(std::string&err) {
         auto reply=[&](int code,const char*msg,const std::string&err){
           return std::make_shared<ix::HttpResponse>(code,msg,ix::HttpErrorCode::Ok,head,json{{"error",err}}.dump(-1,' ',false,json::error_handler_t::replace));
         };
-        if (!is_loopback(state->getRemoteIp())) return reply(403,"Forbidden","local only");
+        if (!is_local(state->getRemoteIp())) return reply(403,"Forbidden","local only");
         auto ct=rq->headers.find("Content-Type");
         if (ct==rq->headers.end()||ct->second.rfind("application/json",0)!=0) return reply(415,"Unsupported Media Type","needs application/json");
         if (rq->body.size()>256*1024) return reply(413,"Payload Too Large","too large");
@@ -312,7 +330,7 @@ void core::loop() {
     std::vector<mah> snp=machines();
     int64_t n=now_ms();
     try {
-      std::string pl=b_snp(snp,n,*hist_).dump(-1,' ',false,json::error_handler_t::replace);
+      std::string pl=b_snp(snp,removed(),n,*hist_).dump(-1,' ',false,json::error_handler_t::replace);
       std::lock_guard<std::mutex> lock(mu_);
       for (const auto&c:wsr_->getClients()) if (dash_.count(c.get())) c->send(pl);
     } catch (const json::exception&e) {
@@ -335,13 +353,89 @@ void core::stop() {
 std::string core::forget(const std::string&id) {
   {
     std::lock_guard<std::mutex> lock(mu_);
-    auto it=mah_.find(id);
-    if (it==mah_.end()) return "unknown";
-    if (std::string(status_of(it->second,now_ms()))!="offline") return "online";
-    mah_.erase(it);
+    if (!mah_.count(id)&&!meta_.count(id)) return "unknown";
+    mah_.erase(id);
+    removed_.insert(id);
   }
-  log(lvl::info,"Removed "+id+" from the list (offline). It comes back when its agent sends data again.");
+  save_meta();
+  log(lvl::info,"Removed "+id+" from the list. Its data is ignored until it is added back on the dashboard.");
   return "";
+}
+
+std::string core::restore(const std::string&id) {
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    if (!removed_.erase(id)) return "unknown";
+  }
+  save_meta();
+  log(lvl::info,"Added "+id+" back. It shows again when its agent sends data.");
+  return "";
+}
+
+std::string core::set_meta(const std::string&id,const std::string&name,const std::string&desc) {
+  // bytes: 40 Thai characters are 120 bytes in UTF-8, 200 are 600
+  if (name.size()>120||desc.size()>600) return "too long";
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    if (!mah_.count(id)&&!meta_.count(id)&&!removed_.count(id)) return "unknown";
+    if (name.empty()&&desc.empty()) meta_.erase(id);
+    else meta_[id]={name,desc};
+  }
+  save_meta();
+  return "";
+}
+
+std::vector<core::removed_pc> core::removed() const {
+  std::lock_guard<std::mutex> lock(mu_);
+  std::vector<removed_pc> v;
+  for (auto&id:removed_) {
+    auto it=meta_.find(id);
+    v.push_back({id,it==meta_.end()?std::string():it->second.name});
+  }
+  return v;
+}
+
+bool core::is_local(const std::string&ip) const {
+  if (is_loopback(ip)) return true;
+  std::lock_guard<std::mutex> lock(mu_);
+  return !net_.net_ip.empty()&&(ip==net_.net_ip||ip=="::ffff:"+net_.net_ip);
+}
+
+// machines.json: {"machines":{"<id>":{"name":"...","desc":"..."}},"removed":["<id>"]}
+void core::load_meta() {
+  std::string p=exe_dir()+"/machines.json";
+  std::error_code ec;
+  if (!std::filesystem::exists(p,ec)) return;
+  json j=json::parse(read_f(p),nullptr,false);
+  if (j.is_discarded()||!j.is_object()) {log(lvl::warn,"machines.json is not valid JSON, ignoring it");return;}
+  std::lock_guard<std::mutex> lock(mu_);
+  if (j.contains("machines")&&j["machines"].is_object())
+    for (auto&[id,v]:j["machines"].items()) {
+      if (!v.is_object()) continue;
+      meta m{v.value("name",""),v.value("desc","")};
+      if (!m.name.empty()||!m.desc.empty()) meta_[id]=m;
+    }
+  if (j.contains("removed")&&j["removed"].is_array())
+    for (auto&id:j["removed"]) if (id.is_string()) removed_.insert(id.get<std::string>());
+}
+
+void core::save_meta() {
+  json j={{"machines",json::object()},{"removed",json::array()}};
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    for (auto&[id,m]:meta_) j["machines"][id]={{"name",m.name},{"desc",m.desc}};
+    for (auto&id:removed_) j["removed"].push_back(id);
+  }
+  std::lock_guard<std::mutex> io(io_);
+  std::string p=exe_dir()+"/machines.json", tmp=p+".tmp";
+  {
+    std::ofstream f(tmp,std::ios::binary|std::ios::trunc);
+    f<<j.dump(2,' ',false,json::error_handler_t::replace)<<'\n';
+    if (!f) {log(lvl::err,"Cannot write "+tmp);return;}
+  }
+  std::error_code ec;
+  std::filesystem::rename(tmp,p,ec);
+  if (ec) {std::filesystem::remove(tmp,ec); log(lvl::err,"Cannot replace "+p);}
 }
 
 netif core::net() const {std::lock_guard<std::mutex> lock(mu_); return net_;}
@@ -349,7 +443,11 @@ netif core::net() const {std::lock_guard<std::mutex> lock(mu_); return net_;}
 std::vector<mah> core::machines() const {
   std::lock_guard<std::mutex> lock(mu_);
   std::vector<mah> v;
-  for (auto&[id,m]:mah_) v.push_back(m);
+  for (auto&[id,m]:mah_) {
+    v.push_back(m);
+    auto it=meta_.find(id);
+    if (it!=meta_.end()) {v.back().name=it->second.name; v.back().desc=it->second.desc;}
+  }
   return v;
 }
 

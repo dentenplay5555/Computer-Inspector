@@ -128,24 +128,31 @@ Server options (`server` only; `server_gui` uses the defaults):
 ```
 
 Test: `tests/baseline_test.py` (see the docstring); results are in `docs/`.
-## Offline computers
+## Managing computers
 
 A computer is offline when it has sent nothing for 30 seconds. Its card says how long:
 "No data for 45 s", "12 min", "3 h 5 min", "2 days 4 h" (the server window's Last
 update column counts the same way).
 
-An offline card has **Remove from dashboard**, for a computer that is switched off for
-good or was only used for a test. After you confirm, it disappears from the dashboards and
-the server window. Its history and baseline are kept. It comes back by itself as soon as
-its agent sends data again; to add it back, run the agent on that computer (the dashboard
-shows the exact command):
+On the server computer, every card has an edit button (pencil) that opens:
 
-```
-./agent --host <server-ip> --id <computer-id>
-```
+- **Display name:** shown instead of the computer ID on the cards, the seat map and the
+  server window (hover the name there to see the ID). Leave it empty to show the ID again.
+  The ID itself belongs to the agent (`--id`, or the hostname) and is what the seat map
+  and the agent command use; it cannot be changed from the dashboard.
+- **Description:** a note under the name, such as "screen flickers".
+- **Remove from dashboard:** for an online or offline computer. It disappears from the
+  dashboards and the server window, and the server ignores its data, until you press
+  **Add back** (in the notice shown after removing, or under **Show removed computers** at the
+  bottom of the page). Its history and baseline are kept.
 
-Only offline computers can be removed (the server refuses one that is still sending), so
-this is allowed from any PC. The dashboard calls `POST /forget` with `{"id": "..."}`.
+Names, descriptions and removed computers are saved in `machines.json` next to the server
+executable, so they survive a restart.
+
+These changes only work in a browser on the server computer itself (`localhost` or its own
+LAN address): the dashboard has no login, and a student must not be able to hide or rename
+their own PC. Other PCs see the names and descriptions but no edit buttons. The dashboard
+uses `GET /me` and `POST /meta`, `/forget`, `/restore` with `{"id": "..."}`.
 
 ## Seat map
 

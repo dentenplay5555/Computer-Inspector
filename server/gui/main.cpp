@@ -345,7 +345,7 @@ static void draw_machines(app&a,const pal&p,float height) {
   }
 
   std::vector<const mah*> rows;
-  for (auto&m:ms) if (!a.find[0]||contains_ci(m.id,a.find)||contains_ci(m.ip,a.find)) rows.push_back(&m);
+  for (auto&m:ms) if (!a.find[0]||contains_ci(m.id,a.find)||contains_ci(m.name,a.find)||contains_ci(m.ip,a.find)) rows.push_back(&m);
   if (rows.empty()) {
     ImGui::Dummy(ImVec2(0,height*0.3f));
     char b[160]; std::snprintf(b,sizeof b,T(a,S_NO_MATCH),a.find);
@@ -394,7 +394,9 @@ static void draw_machines(app&a,const pal&p,float height) {
       bool off=si==3;
       ImGui::TableNextRow(ImGuiTableRowFlags_None,ImGui::GetTextLineHeight()+ImGui::GetStyle().CellPadding.y*2);
       ImGui::PushStyleColor(ImGuiCol_Text,off?p.muted:p.text);
-      ImGui::TableNextColumn(); ImGui::PushFont(a.bold); ImGui::TextUnformatted(m->id.c_str()); ImGui::PopFont();
+      ImGui::TableNextColumn(); ImGui::PushFont(a.bold); ImGui::TextUnformatted((m->name.empty()?m->id:m->name).c_str()); ImGui::PopFont();
+      // name set on the dashboard: the ID and description show on hover
+      if (!m->name.empty()||!m->desc.empty()) ImGui::SetItemTooltip("%s%s%s",m->id.c_str(),m->desc.empty()?"":"\n",m->desc.c_str());
       ImGui::TableNextColumn(); status_dot(status_col(p,si),T(a,(sid)(S_OK+si)));
       ImGui::TableNextColumn(); usage_bar(p,m->cpu,off?999:80,off?999:90,a.scale);
       ImGui::TableNextColumn(); usage_bar(p,m->ram,off?999:80,off?999:90,a.scale);
