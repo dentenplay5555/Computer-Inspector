@@ -190,7 +190,7 @@
     }
 
     /* ---------- room map ---------- */
-    #mapwrap { overflow-x: auto; padding: 4px 2px 8px; }
+    #mapwrap, .mapwrap { overflow-x: auto; padding: 4px 2px 8px; }
     .front {
       text-align: center;
       font-size: 14px;
@@ -199,7 +199,20 @@
       padding-bottom: 6px;
       margin-bottom: 14px;
     }
-    .room { display: grid; gap: 10px; }
+    .room { display: grid; gap: 10px; grid-auto-rows: minmax(64px, auto); }
+    /* label (aisle, teacher's desk...): no computer, only text, any size */
+    .tag {
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      overflow-wrap: anywhere;
+      background: repeating-linear-gradient(135deg, transparent 0 9px, var(--track) 9px 11px);
+    }
     .seat {
       border: 2px solid var(--off-line);
       border-radius: 10px;
@@ -231,6 +244,101 @@
     .outside ul { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 14px; }
     .outside li { display: inline-flex; align-items: center; gap: 6px; }
 
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+    .btn.primary:hover { border-color: var(--text); }
+    .btn.danger { color: var(--crit); }
+    .btn.ico svg + span { margin-left: 2px; }
+    .mapbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; margin-bottom: 12px; }
+    #mapmsg { color: var(--ok); font-weight: 600; font-size: 14px; }
+
+    /* ---------- seat map editor ---------- */
+    .edbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 16px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 14px;
+    }
+    .edbar .grow { flex: 1; }
+    .edbar .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+    .stepper { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; }
+    .stepper output { min-width: 2.2ch; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .stepper .btn { font-size: 20px; line-height: 1; }
+    .edhint { color: var(--muted); font-size: 14px; margin: 10px 0 0; }
+    #ed-msg { min-height: 1.5em; margin: 4px 0 10px; font-size: 14px; color: var(--muted); }
+    #ed-msg.bad { color: var(--crit); font-weight: 600; }
+    /* the page's own pop-up (<dialog>), not confirm(): some browsers block or auto-answer those */
+    .ask {
+      width: min(420px, calc(100vw - 32px));
+      padding: 20px 22px 18px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      color: var(--text);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, .28);
+    }
+    .ask::backdrop { background: rgba(10, 14, 15, .45); }
+    .ask h2 { margin: 0 0 6px; font-size: 18px; line-height: 1.3; }
+    .ask p { margin: 0; color: var(--muted); font-size: 15px; }
+    .ask .acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+    .room.ed .cell { border: 1px dashed var(--off-line); border-radius: 10px; }
+    .blk {
+      position: relative;
+      z-index: 1;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 6px 8px;
+      font-size: 13px;
+      overflow: hidden;
+      overflow-wrap: anywhere;
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .blk.seat-e { background: var(--panel); border: 2px solid var(--off-line); }
+    .blk.seat-e b { font-size: 15px; }
+    .blk.tag { border: 2px dashed var(--off-line); background-color: var(--panel); }
+    .blk[aria-pressed="true"] { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .blk.dragging { z-index: 3; cursor: grabbing; box-shadow: 0 6px 18px rgba(0, 0, 0, .2); }
+    .blk.bad { outline: 3px solid var(--crit); outline-offset: 2px; }
+    /* resize grip, bottom-right corner of a label */
+    .hdl {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 28px;
+      height: 28px;
+      cursor: nwse-resize;
+      touch-action: none;
+      background: linear-gradient(135deg, transparent 0 52%, var(--muted) 52% 60%, transparent 60% 70%, var(--muted) 70% 78%, transparent 78%);
+    }
+    .edside { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 16px; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+    .panel h2 { font-size: 16px; margin: 0 0 6px; }
+    .panel label { display: block; font-size: 14px; margin: 12px 0 4px; }
+    .panel input[type="text"] {
+      width: 100%;
+      min-height: 44px;
+      padding: 0 12px;
+      border: 1px solid var(--off-line);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+    }
+    .panel .stepper { margin: 12px 16px 0 0; }
+    .panel > .btn { margin-top: 14px; }
+    .addrow { display: flex; gap: 8px; }
+    .addrow input { flex: 1; min-width: 0; }
+    .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+
     @media (max-width: 600px) {
       header { padding: 12px 16px; }
       main { padding: 16px 16px 32px; }
@@ -261,8 +369,21 @@
     </section>
     <div class="banner" id="lost" hidden></div>
     <p class="note" id="lnote" hidden></p>
+    <div class="mapbar" id="mapbar" hidden>
+      <span id="mapmsg" role="status" aria-live="polite"></span>
+      <button type="button" class="btn ico" id="edopen"></button>
+    </div>
     <div id="grid"></div>
     <div id="map" hidden></div>
+    <div id="ed" hidden></div>
+    <dialog class="ask" id="askdlg" aria-labelledby="askq" aria-describedby="askp">
+      <h2 id="askq"></h2>
+      <p id="askp"></p>
+      <div class="acts">
+        <button type="button" class="btn" id="ed-keep"></button>
+        <button type="button" class="btn danger" id="ed-discard"></button>
+      </div>
+    </dialog>
   </main>
 
   <script>
@@ -284,9 +405,28 @@
       histFoot: "1 ชั่วโมงล่าสุด · เส้นประ = ค่าปกติ", abn: "ผิดไปจากปกติของเครื่องนี้",
       front: "หน้าห้อง", seatNoData: "ไม่มีข้อมูล", outside: "ไม่อยู่ในผัง",
       mapLabel: "ผังห้อง (เลื่อนซ้ายขวาได้)",
-      layoutMissing: "ยังไม่มีผังที่นั่ง: วางไฟล์ layout.json ไว้โฟลเดอร์เดียวกับโปรแกรม server แล้วโหลดหน้านี้ใหม่",
-      layoutBad: "ไฟล์ layout.json ไม่ถูกต้อง จึงแสดงแบบการ์ดแทน",
-      layoutFail: "โหลดผังที่นั่งไม่ได้ จึงแสดงแบบการ์ดแทน",
+      layoutMissing: "ยังไม่มีผังที่นั่ง: เปิด ผังห้อง แล้วกด สร้างผังที่นั่ง",
+      layoutBad: "ไฟล์ layout.json ไม่ถูกต้อง: แก้ไฟล์ หรือสร้างผังใหม่ที่ ผังห้อง",
+      layoutFail: "โหลดผังที่นั่งไม่ได้",
+      edit: "แก้ไขผัง", create: "สร้างผังที่นั่ง",
+      noMap: "ยังไม่มีผังที่นั่ง", noMapHint: "กด สร้างผังที่นั่ง แล้ววางเครื่องตามตำแหน่งจริงในห้อง",
+      cols: "คอลัมน์", rows: "แถว", width: "กว้าง", height: "สูง", fewer: "ลด", more: "เพิ่ม",
+      addLabel: "เพิ่มป้าย", save: "บันทึก", cancel: "ยกเลิก", download: "ดาวน์โหลดไฟล์",
+      edHint: "ลากบล็อกเพื่อย้าย ลากมุมขวาล่างของป้ายเพื่อปรับขนาด หรือกดเลือกบล็อกแล้วกดช่องที่ต้องการ · คีย์บอร์ด: ลูกศรย้าย, Shift+ลูกศรปรับขนาดป้าย, Delete ลบ, Esc ยกเลิกการเลือก",
+      editArea: "ผังห้องที่กำลังแก้ไข",
+      seat: "ที่นั่ง", label: "ป้าย", selTitle: "บล็อกที่เลือก", selNone: "กดบล็อกในผังเพื่อแก้ไข",
+      seatId: "รหัสเครื่อง", labelText: "ข้อความบนป้าย", labelPh: "เช่น ทางเดิน, โต๊ะครู", remove: "ลบออกจากผัง",
+      unplaced: "เครื่องที่ยังไม่ได้วาง", unplacedNone: "เครื่องที่เชื่อมต่ออยู่ถูกวางในผังครบแล้ว",
+      addById: "เพิ่มที่นั่งด้วยรหัสเครื่อง", add: "เพิ่ม",
+      at: (c, r) => `คอลัมน์ ${c} แถว ${r}`, size: (w, h) => `${w} × ${h} ช่อง`,
+      moved: "ย้ายแล้ว", resized: "ปรับขนาดแล้ว", removed: "ลบออกจากผังแล้ว", saving: "กำลังบันทึก...", saved: "บันทึกผังที่นั่งแล้ว",
+      saveLocal: "บันทึกได้เฉพาะบนเครื่องที่รัน server: กด ดาวน์โหลดไฟล์ แล้ววาง layout.json ไว้โฟลเดอร์เดียวกับโปรแกรม server",
+      saveFail: "บันทึกไม่สำเร็จ",
+      shrinkBlocked: "ย้ายหรือลบบล็อกในคอลัมน์หรือแถวสุดท้ายออกก่อน",
+      noRoom: "ไม่มีช่องว่างเหลือ เพิ่มคอลัมน์หรือแถวก่อน",
+      noFit: "วางตรงนั้นไม่ได้: ชนบล็อกอื่นหรือเกินขอบห้อง",
+      idTaken: "รหัสนี้อยู่ในผังแล้ว", textEmpty: "ใส่ข้อความบนป้าย หรือลบป้ายนี้ออก", idEmpty: "ต้องใส่รหัสเครื่อง", idLong: "รหัสเครื่องยาวเกิน 64 ตัวอักษร",
+      discard: "ทิ้งการแก้ไขที่ยังไม่ได้บันทึก?", discardHint: "ผังที่บันทึกไว้จะไม่เปลี่ยน", discardYes: "ทิ้งการแก้ไข", keep: "แก้ไขต่อ",
     },
     en: {
       subtitle: "Teacher dashboard", cards: "Cards", map: "Room map",
@@ -304,9 +444,28 @@
       histFoot: "Last hour · dashed line = normal", abn: "Unusual for this computer",
       front: "Front of room", seatNoData: "No data", outside: "Not in the layout",
       mapLabel: "Room map (scrolls sideways)",
-      layoutMissing: "No seat map yet: put layout.json in the same folder as the server program, then reload this page",
-      layoutBad: "layout.json is invalid, showing cards instead",
-      layoutFail: "Could not load the seat map, showing cards instead",
+      layoutMissing: "No seat map yet: open Room map and press Create seat map",
+      layoutBad: "layout.json is invalid: fix the file, or make a new map under Room map",
+      layoutFail: "Could not load the seat map",
+      edit: "Edit map", create: "Create seat map",
+      noMap: "No seat map yet", noMapHint: "Press Create seat map, then place each computer where it really is in the room",
+      cols: "Columns", rows: "Rows", width: "Width", height: "Height", fewer: "Fewer", more: "More",
+      addLabel: "Add label", save: "Save", cancel: "Cancel", download: "Download file",
+      edHint: "Drag a block to move it. Drag the bottom-right corner of a label to resize it. Or select a block, then click the cell it should go to · Keyboard: arrows move, Shift+arrows resize a label, Delete removes, Esc deselects",
+      editArea: "Room map being edited",
+      seat: "Seat", label: "Label", selTitle: "Selected block", selNone: "Click a block in the map to change it",
+      seatId: "Computer ID", labelText: "Label text", labelPh: "e.g. aisle, teacher's desk", remove: "Remove from map",
+      unplaced: "Computers not placed yet", unplacedNone: "Every connected computer is in the map",
+      addById: "Add a seat by computer ID", add: "Add",
+      at: (c, r) => `column ${c}, row ${r}`, size: (w, h) => `${w} × ${h} cells`,
+      moved: "Moved", resized: "Resized", removed: "Removed from the map", saving: "Saving...", saved: "Seat map saved",
+      saveLocal: "Only the server computer can save. Press Download file, then put layout.json in the same folder as the server program",
+      saveFail: "Could not save",
+      shrinkBlocked: "Move or remove the blocks in the last column or row first",
+      noRoom: "No free cell left. Add a column or a row first",
+      noFit: "Cannot go there: it overlaps another block or leaves the room",
+      idTaken: "That ID is already in the map", textEmpty: "Type the label text, or remove the label", idEmpty: "Type a computer ID", idLong: "Computer IDs can be at most 64 characters",
+      discard: "Discard the changes you have not saved?", discardHint: "The saved seat map stays as it is.", discardYes: "Discard changes", keep: "Keep editing",
     },
   };
   const STATES = ["ok", "warn", "crit", "offline"];
@@ -314,6 +473,7 @@
   const ICON = {
     globe: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>`,
     moon: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>`,
+    pencil: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>`,
     sun: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>`,
   };
   const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -331,6 +491,7 @@
   let lastDt = null;            // last snapshot from the server
   let layout = null;            // checked layout.json, or null
   let layoutNote = null;        // key of the note to show about layout.json
+  let mapMsg = null;            // short "saved" message next to the Edit button
   const t = () => TXT[lang];
 
   // ---------- history graphs (fetched every 10 s per machine from /history) ----------
@@ -403,22 +564,43 @@
   }
 
   // ---------- seat map ----------
-  // layout.json: {"cols":6,"seats":{"A-01":[0,0],"A-02":[1,0]}}  values are [column, row], row 0 = front
+  // layout.json: {"cols":6, "rows":4, "seats":{"A-01":[0,0]}, "labels":[{"c":2,"r":0,"w":1,"h":4,"text":"aisle"}]}
+  // seats are [column, row], row 0 = front. "rows" and "labels" are optional; a label needs text.
+  // Blocks may not overlap.
+  // The server checks the same rules when the editor saves (check_layout in server/core.cpp).
+  const MAXC = 30, MAXR = 50;
+  const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+  const overlaps = (a, b) => a.c < b.c + b.w && b.c < a.c + a.w && a.r < b.r + b.h && b.r < a.r + a.h;
   function checkLayout(j) {
     if (!j || typeof j !== "object" || Array.isArray(j)) return null;
     const cols = j.cols;
-    if (!Number.isInteger(cols) || cols < 1 || cols > 30) return null;
+    if (!isInt(cols, 1, MAXC)) return null;
+    if (j.rows !== undefined && !isInt(j.rows, 1, MAXR)) return null;
+    const maxR = j.rows || MAXR;
     if (!j.seats || typeof j.seats !== "object" || Array.isArray(j.seats)) return null;
-    const seats = [], used = new Set();
+    const seats = [], labels = [], all = [];
     for (const [id, p] of Object.entries(j.seats)) {
-      if (!Array.isArray(p) || p.length !== 2) return null;
+      if (!id || id.length > 64 || !Array.isArray(p) || p.length !== 2) return null;
       const [c, r] = p;
-      if (!Number.isInteger(c) || !Number.isInteger(r) || c < 0 || c >= cols || r < 0 || r >= 50) return null;
-      if (used.has(c + "," + r)) return null;     // two computers on one seat
-      used.add(c + "," + r);
-      seats.push({ id: String(id), c, r });
+      if (!isInt(c, 0, cols - 1) || !isInt(r, 0, maxR - 1)) return null;
+      seats.push({ id, c, r });
+      all.push({ c, r, w: 1, h: 1 });
     }
-    return seats.length ? { cols, seats } : null;
+    if (j.labels !== undefined) {
+      if (!Array.isArray(j.labels)) return null;
+      for (const x of j.labels) {
+        if (!x || typeof x !== "object") return null;
+        const { c, r, w, h } = x;
+        if (!isInt(c, 0, cols - 1) || !isInt(r, 0, maxR - 1) || !isInt(w, 1, cols - c) || !isInt(h, 1, maxR - r)) return null;
+        if (typeof x.text !== "string" || !x.text.trim()) return null;
+        labels.push({ c, r, w, h, text: (x.text || "").slice(0, 40) });
+        all.push({ c, r, w, h });
+      }
+    }
+    for (let a = 0; a < all.length; a++)
+      for (let b = a + 1; b < all.length; b++) if (overlaps(all[a], all[b])) return null;
+    const need = Math.max(1, ...all.map(b => b.r + b.h));
+    return { cols, rows: Math.max(j.rows || 0, need), seats, labels };
   }
   function loadLayout() {
     fetch("/layout.json", { cache: "no-store" })
@@ -443,6 +625,8 @@
     const T = t();
     const byId = new Map(ms.map(m => [m.id, m]));
     const inLayout = new Set(layout.seats.map(s => s.id));
+    const labels = layout.labels.map(x =>
+      `<div class="tag" style="grid-column:${x.c + 1}/span ${x.w};grid-row:${x.r + 1}/span ${x.h}"${x.text ? "" : ' aria-hidden="true"'}>${esc(x.text)}</div>`).join("");
     const tiles = layout.seats.map(s => {
       const m = byId.get(s.id);
       const st = m && STATES.includes(m.status) ? m.status : "none";
@@ -459,7 +643,413 @@
           `<li class="${esc(m.status)}"><span class="dot"></span>${esc(m.id)}: ${esc(T[m.status] || m.status)}</li>`).join("")}</ul></div>`
       : "";
     return `<div id="mapwrap" tabindex="0" role="region" aria-label="${esc(T.mapLabel)}"><div class="front">${esc(T.front)}</div>
-      <div class="room" style="grid-template-columns:repeat(${layout.cols},minmax(84px,1fr))">${tiles}</div></div>${outside}`;
+      <div class="room" style="grid-template-columns:repeat(${layout.cols},minmax(84px,1fr));grid-template-rows:repeat(${layout.rows},minmax(64px,auto))">${labels}${tiles}</div></div>${outside}`;
+  }
+
+  // ---------- seat map editor ----------
+  // Works on a copy of the layout; nothing changes on the server until Save.
+  // Blocks are seats (1 x 1, one computer) and labels (w x h, text such as "aisle").
+  let ed = null;     // {cols, rows, seats, labels, sel, dirty, msg, msgBad, msgExtra, lang, trayKey}
+  let drag = null;   // pointer drag in progress
+  function edStart() {
+    const L = layout || { cols: 6, rows: 5, seats: [], labels: [] };
+    ed = { cols: L.cols, rows: L.rows, seats: L.seats.map(x => ({ ...x })), labels: L.labels.map(x => ({ ...x })),
+           sel: null, dirty: false, msg: "", msgBad: false, msgExtra: "", lang: null, trayKey: "" };
+    mapMsg = null;
+    render();
+    $("ed-addlb").focus();
+  }
+  function edStop(force) {
+    if (!ed) return;
+    if (ed.dirty && !force) {           // ask first; "Keep editing" is the safe default
+      const T = t();
+      $("askq").textContent = T.discard;
+      $("askp").textContent = T.discardHint;
+      $("ed-keep").textContent = T.keep;
+      $("ed-discard").textContent = T.discardYes;
+      $("askdlg").showModal();
+      $("ed-keep").focus();
+      return;
+    }
+    if ($("askdlg").open) $("askdlg").close();
+    ed = null; drag = null;
+    render();
+    $("edopen").focus();
+  }
+  const edItem = (k, i) => k === "seat" ? ed.seats[i] : ed.labels[i];
+  const edBlocks = () => [
+    ...ed.seats.map((x, i) => ({ k: "seat", i, c: x.c, r: x.r, w: 1, h: 1 })),
+    ...ed.labels.map((x, i) => ({ k: "label", i, c: x.c, r: x.r, w: x.w, h: x.h })),
+  ];
+  // true when block (k, i) may sit at c, r with size w x h
+  function edFits(k, i, c, r, w, h) {
+    if (c < 0 || r < 0 || w < 1 || h < 1 || c + w > ed.cols || r + h > ed.rows) return false;
+    const me = { c, r, w, h };
+    return !edBlocks().some(b => !(b.k === k && b.i === i) && overlaps(me, b));
+  }
+  function edFree() {
+    for (let r = 0; r < ed.rows; r++)
+      for (let c = 0; c < ed.cols; c++) if (edFits(null, -1, c, r, 1, 1)) return { c, r };
+    return null;
+  }
+  function edSay(key, bad, extra) {
+    ed.msg = key; ed.msgBad = !!bad; ed.msgExtra = extra || "";
+    const el = $("ed-msg");
+    if (!el) return;
+    el.textContent = key ? t()[key] + (ed.msgExtra ? ": " + ed.msgExtra : "") : "";
+    el.className = ed.msgBad ? "bad" : "";
+  }
+  function edLabel(k, x) {
+    const T = t();
+    return k === "seat"
+      ? `${T.seat} ${x.id}, ${T.at(x.c + 1, x.r + 1)}`
+      : `${T.label}${x.text ? " " + x.text : ""}, ${T.at(x.c + 1, x.r + 1)}, ${T.size(x.w, x.h)}`;
+  }
+  function edFocusSel() {
+    if (!ed || !ed.sel) return;
+    const el = $("ed-grid").querySelector(`.blk[data-k="${ed.sel.k}"][data-i="${ed.sel.i}"]`);
+    if (el) el.focus();
+  }
+  function stepper(id, label, value) {
+    const T = t();
+    return `<div class="stepper" role="group" aria-label="${esc(label)}"><span>${esc(label)}</span>
+      <button type="button" class="btn sq" id="${id}-" aria-label="${esc(T.fewer + " " + label)}">−</button>
+      <output id="${id}v" aria-live="polite">${value}</output>
+      <button type="button" class="btn sq" id="${id}+" aria-label="${esc(T.more + " " + label)}">+</button></div>`;
+  }
+
+  // static parts, rebuilt only when the language changes
+  function edBuild() {
+    const T = t();
+    ed.lang = lang; ed.trayKey = "";
+    $("ed").innerHTML = `
+      <div class="edbar" id="ed-bar">
+        ${stepper("ed-c", T.cols, ed.cols)}
+        ${stepper("ed-r", T.rows, ed.rows)}
+        <button type="button" class="btn" id="ed-addlb">+ ${esc(T.addLabel)}</button>
+        <span class="grow"></span>
+        <div class="acts">
+          <button type="button" class="btn" id="ed-dl">${esc(T.download)}</button>
+          <button type="button" class="btn" id="ed-cancel">${esc(T.cancel)}</button>
+          <button type="button" class="btn primary" id="ed-save">${esc(T.save)}</button>
+        </div>
+      </div>
+      <p class="edhint">${esc(T.edHint)}</p>
+      <p id="ed-msg" role="status" aria-live="polite"></p>
+      <div class="mapwrap"><div class="front">${esc(T.front)}</div>
+        <div class="room ed" id="ed-grid" role="group" aria-label="${esc(T.editArea)}"></div></div>
+      <div class="edside">
+        <section class="panel" id="ed-insp" aria-live="polite"></section>
+        <section class="panel">
+          <h2>${esc(T.unplaced)}</h2>
+          <div id="ed-tray"></div>
+          <form id="ed-addf">
+            <label for="ed-newid">${esc(T.addById)}</label>
+            <div class="addrow"><input type="text" id="ed-newid" maxlength="64" autocomplete="off" spellcheck="false">
+              <button type="submit" class="btn">${esc(T.add)}</button></div>
+          </form>
+        </section>
+      </div>`;
+    $("ed-bar").addEventListener("click", e => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      if (b.id === "ed-c-") edResizeRoom(-1, 0);
+      else if (b.id === "ed-c+") edResizeRoom(1, 0);
+      else if (b.id === "ed-r-") edResizeRoom(0, -1);
+      else if (b.id === "ed-r+") edResizeRoom(0, 1);
+      else if (b.id === "ed-addlb") edAddLabel();
+      else if (b.id === "ed-dl") edDownload();
+      else if (b.id === "ed-cancel") edStop(false);
+      else if (b.id === "ed-save") edSave();
+    });
+    $("ed-tray").addEventListener("click", e => {
+      const b = e.target.closest("button[data-add]");
+      if (b) edAddSeat(b.dataset.add);
+    });
+    $("ed-addf").addEventListener("submit", e => {
+      e.preventDefault();
+      if (edAddSeat($("ed-newid").value, true)) $("ed-newid").value = "";
+    });
+    wireInspector($("ed-insp"));
+    wireGrid($("ed-grid"));
+    edDraw();
+    edSay(ed.msg, ed.msgBad, ed.msgExtra);
+  }
+
+  // grid + inspector + tray; keeps keyboard focus where it was
+  function edDraw() {
+    const T = t();
+    const act = document.activeElement;
+    const actBlk = act && act.classList && act.classList.contains("blk");
+    const actId = act && act.id;
+    $("ed-cv").textContent = ed.cols;
+    $("ed-rv").textContent = ed.rows;
+    let h = "";
+    for (let r = 0; r < ed.rows; r++)
+      for (let c = 0; c < ed.cols; c++)
+        h += `<div class="cell" data-c="${c}" data-r="${r}" style="grid-column:${c + 1};grid-row:${r + 1}"></div>`;
+    const on = (k, i) => !!ed.sel && ed.sel.k === k && ed.sel.i === i;
+    ed.labels.forEach((x, i) => {
+      h += `<div class="blk tag" data-k="label" data-i="${i}" tabindex="0" role="button" aria-pressed="${on("label", i)}"
+        aria-label="${esc(edLabel("label", x))}" style="grid-column:${x.c + 1}/span ${x.w};grid-row:${x.r + 1}/span ${x.h}">
+        <span class="txt">${esc(x.text)}</span><span class="hdl" aria-hidden="true"></span></div>`;
+    });
+    ed.seats.forEach((x, i) => {
+      h += `<div class="blk seat-e" data-k="seat" data-i="${i}" tabindex="0" role="button" aria-pressed="${on("seat", i)}"
+        aria-label="${esc(edLabel("seat", x))}" style="grid-column:${x.c + 1};grid-row:${x.r + 1}"><b>${esc(x.id)}</b></div>`;
+    });
+    const g = $("ed-grid");
+    g.style.gridTemplateColumns = `repeat(${ed.cols}, minmax(84px, 1fr))`;
+    g.style.gridTemplateRows = `repeat(${ed.rows}, 64px)`;
+    g.innerHTML = h;
+    edInspector();
+    edTray(true);
+    if (actBlk) edFocusSel();
+    else if (actId && $(actId) && $(actId) !== act) $(actId).focus();
+  }
+
+  function edInspector() {
+    const T = t(), box = $("ed-insp");
+    if (!ed.sel) {
+      box.innerHTML = `<h2>${esc(T.selTitle)}</h2><p class="small">${esc(T.selNone)}</p>`;
+      return;
+    }
+    const x = edItem(ed.sel.k, ed.sel.i);
+    if (ed.sel.k === "seat") {
+      box.innerHTML = `<h2>${esc(T.seat)}: ${esc(x.id)}</h2><p class="small">${esc(T.at(x.c + 1, x.r + 1))}</p>
+        <label for="ed-id">${esc(T.seatId)}</label>
+        <input type="text" id="ed-id" maxlength="64" value="${esc(x.id)}" autocomplete="off" spellcheck="false">
+        <button type="button" class="btn danger" id="ed-rm">${esc(T.remove)}</button>`;
+    } else {
+      box.innerHTML = `<h2>${esc(T.label)}</h2><p class="small">${esc(T.at(x.c + 1, x.r + 1))}</p>
+        <label for="ed-lbl">${esc(T.labelText)}</label>
+        <input type="text" id="ed-lbl" maxlength="40" value="${esc(x.text)}" placeholder="${esc(T.labelPh)}" autocomplete="off">
+        ${stepper("ed-w", T.width, x.w)}${stepper("ed-h", T.height, x.h)}
+        <div><button type="button" class="btn danger" id="ed-rm">${esc(T.remove)}</button></div>`;
+    }
+  }
+  function wireInspector(box) {
+    box.addEventListener("click", e => {
+      const b = e.target.closest("button");
+      if (!b || !ed.sel) return;
+      const { k, i } = ed.sel, x = edItem(k, i);
+      if (b.id === "ed-rm") return edRemove(k, i);
+      const d = { "ed-w-": [-1, 0], "ed-w+": [1, 0], "ed-h-": [0, -1], "ed-h+": [0, 1] }[b.id];
+      if (d && k === "label") edSet(k, i, x.c, x.r, x.w + d[0], x.h + d[1]);
+    });
+    box.addEventListener("input", e => {
+      if (e.target.id !== "ed-lbl" || !ed.sel) return;
+      const x = edItem("label", ed.sel.i);
+      x.text = e.target.value.slice(0, 40);
+      ed.dirty = true;
+      // update the block in place: a full redraw would move the text cursor
+      const el = $("ed-grid").querySelector(`.blk[data-k="label"][data-i="${ed.sel.i}"]`);
+      if (el) { el.querySelector(".txt").textContent = x.text; el.setAttribute("aria-label", edLabel("label", x)); }
+    });
+    box.addEventListener("change", e => {
+      if (e.target.id !== "ed-id" || !ed.sel) return;
+      const x = edItem("seat", ed.sel.i), id = e.target.value.trim();
+      const bad = !id ? "idEmpty" : id.length > 64 ? "idLong"
+        : ed.seats.some((s, j) => j !== ed.sel.i && s.id === id) ? "idTaken" : "";
+      if (bad) { e.target.value = x.id; edSay(bad, true); return; }
+      if (id !== x.id) { x.id = id; ed.dirty = true; edSay(""); edDraw(); }
+    });
+  }
+
+  function edTray(force) {
+    const T = t();
+    const placed = new Set(ed.seats.map(x => x.id));
+    const ids = (lastDt ? lastDt.machines : []).map(m => String(m.id)).filter(id => !placed.has(id));
+    const key = ids.join("\n");
+    if (!force && key === ed.trayKey) return;
+    ed.trayKey = key;
+    const act = document.activeElement, actAdd = act && act.dataset && act.dataset.add;
+    $("ed-tray").innerHTML = ids.length
+      ? `<ul class="chips">${ids.map(id => `<li><button type="button" class="btn" data-add="${esc(id)}">+ ${esc(id)}</button></li>`).join("")}</ul>`
+      : `<p class="small">${esc(T.unplacedNone)}</p>`;
+    if (actAdd) for (const b of $("ed-tray").querySelectorAll("button[data-add]")) if (b.dataset.add === actAdd) b.focus();
+  }
+
+  // ---- edits ----
+  function edSet(k, i, c, r, w, h) {      // move and/or resize one block; false if it does not fit
+    if (!edFits(k, i, c, r, w, h)) { edSay("noFit", true); return false; }
+    const x = edItem(k, i);
+    x.c = c; x.r = r;
+    if (k === "label") { x.w = w; x.h = h; }
+    ed.sel = { k, i }; ed.dirty = true;
+    edSay("");
+    edDraw();
+    return true;
+  }
+  function edSelect(k, i) {
+    ed.sel = k ? { k, i } : null;
+    edDraw();
+    if (k) edFocusSel();
+  }
+  function edResizeRoom(dc, dr) {
+    const nc = ed.cols + dc, nr = ed.rows + dr;
+    if (nc < 1 || nc > MAXC || nr < 1 || nr > MAXR) return;
+    if (edBlocks().some(b => b.c + b.w > nc || b.r + b.h > nr)) { edSay("shrinkBlocked", true); return; }
+    ed.cols = nc; ed.rows = nr; ed.dirty = true;
+    edSay("");
+    edDraw();
+  }
+  function edAddSeat(raw, fromForm) {
+    const id = String(raw).trim();
+    const bad = !id ? "idEmpty" : id.length > 64 ? "idLong" : ed.seats.some(x => x.id === id) ? "idTaken" : "";
+    if (bad) { edSay(bad, true); return false; }
+    const at = edFree();
+    if (!at) { edSay("noRoom", true); return false; }
+    ed.seats.push({ id, c: at.c, r: at.r });
+    ed.sel = { k: "seat", i: ed.seats.length - 1 }; ed.dirty = true;
+    edSay("");
+    edDraw();
+    if (!fromForm) edFocusSel();
+    return true;
+  }
+  function edAddLabel() {
+    const at = edFree();
+    if (!at) { edSay("noRoom", true); return; }
+    ed.labels.push({ c: at.c, r: at.r, w: 1, h: 1, text: "" });
+    ed.sel = { k: "label", i: ed.labels.length - 1 }; ed.dirty = true;
+    edSay("");
+    edDraw();
+    $("ed-lbl").focus();      // a label is its text: type it straight away
+  }
+  function edRemove(k, i) {
+    (k === "seat" ? ed.seats : ed.labels).splice(i, 1);
+    ed.sel = null; ed.dirty = true;
+    edSay("removed");
+    edDraw();
+    $("ed-addlb").focus();
+  }
+
+  // ---- pointer: drag to move, drag the corner grip to resize, tap a block then tap a cell ----
+  function cellAt(g, x, y) {
+    const R = g.getBoundingClientRect(), cs = getComputedStyle(g);
+    const gx = parseFloat(cs.columnGap) || 0, gy = parseFloat(cs.rowGap) || 0;
+    const cw = (R.width - gx * (ed.cols - 1)) / ed.cols, rh = (R.height - gy * (ed.rows - 1)) / ed.rows;
+    return { c: Math.floor((x - R.left) / (cw + gx)), r: Math.floor((y - R.top) / (rh + gy)) };
+  }
+  function wireGrid(g) {
+    g.addEventListener("pointerdown", e => {
+      const el = e.target.closest(".blk");
+      if (!el || e.button !== 0) return;
+      const k = el.dataset.k, i = +el.dataset.i, x = edItem(k, i), at = cellAt(g, e.clientX, e.clientY);
+      drag = { el, k, i, size: e.target.classList.contains("hdl"), x0: e.clientX, y0: e.clientY,
+               dc: at.c - x.c, dr: at.r - x.r, moved: false, ok: true, c: x.c, r: x.r, w: x.w || 1, h: x.h || 1 };
+      el.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    g.addEventListener("pointermove", e => {
+      if (!drag) return;
+      if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 5) return;
+      drag.moved = true;
+      const x = edItem(drag.k, drag.i), at = cellAt(g, e.clientX, e.clientY);
+      if (drag.size) {
+        drag.w = Math.max(1, Math.min(ed.cols - x.c, at.c - x.c + 1));
+        drag.h = Math.max(1, Math.min(ed.rows - x.r, at.r - x.r + 1));
+      } else {
+        drag.c = Math.max(0, Math.min(ed.cols - drag.w, at.c - drag.dc));
+        drag.r = Math.max(0, Math.min(ed.rows - drag.h, at.r - drag.dr));
+      }
+      drag.ok = edFits(drag.k, drag.i, drag.c, drag.r, drag.w, drag.h);
+      drag.el.style.gridColumn = `${drag.c + 1}/span ${drag.w}`;
+      drag.el.style.gridRow = `${drag.r + 1}/span ${drag.h}`;
+      drag.el.classList.add("dragging");
+      drag.el.classList.toggle("bad", !drag.ok);
+    });
+    const end = e => {
+      if (!drag) return;
+      const d = drag;
+      drag = null;
+      if (!d.moved) return edSelect(d.k, d.i);
+      if (e.type === "pointerup" && d.ok) { edSet(d.k, d.i, d.c, d.r, d.w, d.h); edSay(d.size ? "resized" : "moved"); edFocusSel(); }
+      else { if (e.type === "pointerup") edSay("noFit", true); edDraw(); }
+    };
+    g.addEventListener("pointerup", end);
+    g.addEventListener("pointercancel", end);
+    g.addEventListener("click", e => {
+      const cell = e.target.closest(".cell");
+      if (!cell || !ed.sel) return;
+      const x = edItem(ed.sel.k, ed.sel.i);
+      if (edSet(ed.sel.k, ed.sel.i, +cell.dataset.c, +cell.dataset.r, x.w || 1, x.h || 1)) { edSay("moved"); edFocusSel(); }
+    });
+    g.addEventListener("keydown", e => {
+      const el = e.target.closest(".blk");
+      if (!el) return;
+      const k = el.dataset.k, i = +el.dataset.i, x = edItem(k, i);
+      const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+      if (d) {
+        e.preventDefault();
+        const ok = e.shiftKey && k === "label"
+          ? edSet(k, i, x.c, x.r, x.w + d[0], x.h + d[1])
+          : edSet(k, i, x.c + d[0], x.r + d[1], x.w || 1, x.h || 1);
+        if (ok) edFocusSel();
+      } else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); edSelect(k, i); }
+      else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); edRemove(k, i); }
+      else if (e.key === "Escape") { e.preventDefault(); ed.sel = null; edDraw(); el.blur(); $("ed-addlb").focus(); }
+    });
+  }
+
+  // ---- output ----
+  function edOut() {
+    const o = { cols: ed.cols, rows: ed.rows, seats: {} };
+    for (const x of [...ed.seats].sort((a, b) => a.r - b.r || a.c - b.c)) o.seats[x.id] = [x.c, x.r];
+    if (ed.labels.length)
+      o.labels = ed.labels.map(x => ({ c: x.c, r: x.r, w: x.w, h: x.h, text: x.text.trim() }));
+    return o;
+  }
+  // one seat or label per line, like the server writes it
+  function fmtLayout(o) {
+    const q = JSON.stringify, seats = Object.entries(o.seats);
+    let s = `{\n  "cols": ${o.cols},\n  "rows": ${o.rows},\n  "seats": {`;
+    s += seats.length ? seats.map(([id, p]) => `\n    ${q(id)}: [${p[0]}, ${p[1]}]`).join(",") + "\n  }" : "}";
+    if (o.labels) s += `,\n  "labels": [` + o.labels.map(x =>
+      `\n    {"c": ${x.c}, "r": ${x.r}, "w": ${x.w}, "h": ${x.h}${x.text ? `, "text": ${q(x.text)}` : ""}}`).join(",") + "\n  ]";
+    return s + "\n}\n";
+  }
+  // false (and points at it) when a label has no text yet
+  function edReady() {
+    const i = ed.labels.findIndex(x => !x.text.trim());
+    if (i < 0) return true;
+    ed.sel = { k: "label", i };
+    edDraw();
+    edSay("textEmpty", true);
+    $("ed-lbl").focus();
+    return false;
+  }
+  function edDownload() {
+    if (!edReady()) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([fmtLayout(edOut())], { type: "application/json" }));
+    a.download = "layout.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  async function edSave() {
+    if (!edReady()) return;
+    const out = edOut();
+    edSay("saving");
+    let r, j = null;
+    try {
+      r = await fetch("/layout.json", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(out), cache: "no-store" });
+      j = await r.json().catch(() => null);
+    } catch (e) { if (ed) edSay("saveFail", true); return; }
+    if (!ed) return;
+    if (r.status === 403) return edSay("saveLocal", true);
+    // an older server answers any request to /layout.json with the file, so look for {"ok":true}
+    if (!r.ok || !j || j.ok !== true) return edSay("saveFail", true, j && j.error ? j.error : "HTTP " + r.status);
+    layout = checkLayout(out);
+    layoutNote = null;
+    ed = null;
+    view = "map"; store.set("ci-view", view);
+    mapMsg = "saved";
+    setTimeout(() => { mapMsg = null; render(); }, 5000);
+    render();
+    $("edopen").focus();
   }
 
   // ---------- page ----------
@@ -476,9 +1066,9 @@
     $("theme").innerHTML = theme === "dark" ? ICON.sun : ICON.moon;
     $("theme").setAttribute("aria-label", tl);
     $("theme").title = tl;
-    $("views").hidden = !layout;
+    $("views").hidden = !!ed;
     for (const b of document.querySelectorAll("#views button")) b.setAttribute("aria-pressed", String(b.dataset.v === view));
-    $("lnote").hidden = !layoutNote;
+    $("lnote").hidden = !layoutNote || !!ed;
     $("lnote").textContent = layoutNote ? T[layoutNote] : "";
 
     $("conndot").className = "dot " + ({ connecting: "wait", connected: "live", lost: "lost" })[conn];
@@ -492,7 +1082,18 @@
     $("counts").innerHTML = lastDt ? STATES.map(s =>
       `<div class="count ${n[s] ? s : "zero"}"><b>${n[s]}</b><span>${esc(T[s])}</span></div>`).join("") : "";
 
-    const mapOn = view === "map" && !!layout;
+    $("mapbar").hidden = !!ed || view !== "map";
+    $("edopen").innerHTML = ICON.pencil + `<span>${esc(layout ? T.edit : T.create)}</span>`;
+    $("edopen").classList.toggle("primary", !layout);
+    $("mapmsg").textContent = mapMsg ? T[mapMsg] : "";
+    $("ed").hidden = !ed;
+    if (ed) {
+      $("grid").hidden = true; $("map").hidden = true;
+      if (ed.lang !== lang) edBuild(); else edTray(false);
+      return;
+    }
+
+    const mapOn = view === "map";
     $("grid").hidden = mapOn;
     $("map").hidden = !mapOn;
     if (!lastDt) {
@@ -507,7 +1108,8 @@
         <p>${esc(T.emptyHint)}</p><code>./agent --host ${esc(host)}</code></div>`;
       return;
     }
-    if (mapOn) $("map").innerHTML = renderMap(ms);
+    if (mapOn) $("map").innerHTML = layout ? renderMap(ms)
+      : `<div class="empty"><h2>${esc(T.noMap)}</h2><p>${esc(T.noMapHint)}</p></div>`;
     else $("grid").innerHTML = ms.map(card).join("");
   }
 
@@ -515,6 +1117,16 @@
     b.addEventListener("click", () => { view = b.dataset.v; store.set("ci-view", view); render(); });
   $("lang").addEventListener("click", () => { lang = lang === "th" ? "en" : "th"; store.set("ci-lang", lang); render(); });
   $("theme").addEventListener("click", () => { theme = theme === "dark" ? "light" : "dark"; store.set("ci-theme", theme); render(); });
+  $("edopen").addEventListener("click", edStart);
+  // discard question: Esc, the backdrop and "Keep editing" all mean keep editing
+  $("ed-discard").addEventListener("click", () => edStop(true));
+  $("ed-keep").addEventListener("click", () => $("askdlg").close());
+  $("askdlg").addEventListener("click", e => {
+    const r = $("askdlg").getBoundingClientRect();     // a click on the dialog's own padding also targets it
+    if (e.target === $("askdlg") && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) $("askdlg").close();
+  });
+  $("askdlg").addEventListener("close", () => { if (ed && $("ed-cancel")) $("ed-cancel").focus(); });
+  addEventListener("beforeunload", e => { if (ed && ed.dirty) { e.preventDefault(); e.returnValue = ""; } });
 
   function connect() {
     const host = location.hostname || "127.0.0.1";
