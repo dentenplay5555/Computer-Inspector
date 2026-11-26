@@ -265,10 +265,12 @@ static void draw_connect(app&a,const pal&p) {
 }
 
 static std::string ago(app&a,int64_t ms) {
-  char b[64];
-  int s=(int)(ms/1000);
-  if (s<120) std::snprintf(b,sizeof b,T(a,S_SEC_AGO),s);
-  else std::snprintf(b,sizeof b,T(a,S_MIN_AGO),s/60);
+  char b[128];
+  long long s=ms/1000, m=s/60, h=m/60, d=h/24;
+  if (s<60) std::snprintf(b,sizeof b,T(a,S_SEC_AGO),(int)s);
+  else if (m<60) std::snprintf(b,sizeof b,T(a,S_MIN_AGO),(int)m);
+  else if (h<24) std::snprintf(b,sizeof b,T(a,S_HOUR_AGO),(int)h,(int)(m%60));
+  else std::snprintf(b,sizeof b,T(a,d==1?S_DAY_AGO:S_DAYS_AGO),(int)d,(int)(h%24));
   return b;
 }
 

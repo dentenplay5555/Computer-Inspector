@@ -210,6 +210,23 @@ bool core::start(std::string&err) {
   http_->setOnConnectionCallback(
     [this](ix::HttpRequestPtr rq,std::shared_ptr<ix::ConnectionState> state)->ix::HttpResponsePtr {
       ix::WebSocketHttpHeaders head;
+      // Removing an offline computer from the dashboard. Allowed from any PC: only offline
+      // computers can go, and they come back as soon as their agent reports again.
+      if (rq->uri=="/forget"&&rq->method=="POST") {
+        head["Content-Type"]="application/json";
+        head["Cache-Control"]="no-store";
+        auto reply=[&](int code,const char*msg,const json&body){
+          return std::make_shared<ix::HttpResponse>(code,msg,ix::HttpErrorCode::Ok,head,body.dump(-1,' ',false,json::error_handler_t::replace));
+        };
+        auto ct=rq->headers.find("Content-Type");
+        if (ct==rq->headers.end()||ct->second.rfind("application/json",0)!=0) return reply(415,"Unsupported Media Type",{{"error","needs application/json"}});
+        json j=json::parse(rq->body,nullptr,false);
+        if (j.is_discarded()||!j.is_object()||!j.contains("id")||!j["id"].is_string()) return reply(400,"Bad Request",{{"error","needs {\"id\": \"...\"}"}});
+        std::string why=forget(j["id"].get<std::string>());
+        if (why=="unknown") return reply(404,"Not Found",{{"error","unknown id"}});
+        if (why=="online") return reply(409,"Conflict",{{"error","still sending data"}});
+        return reply(200,"OK",{{"ok",true}});
+      }
       // Saving the seat map from the dashboard's editor. Only from the server computer:
       // the dashboard has no login, so other PCs on the LAN must not rewrite the room.
       // Requiring application/json also makes a browser refuse cross-site posts (preflight).
@@ -313,6 +330,18 @@ void core::stop() {
   if (wsr_) {wsr_->stop(); wsr_.reset();}
   {std::lock_guard<std::mutex> lock(mu_); dash_.clear();}
   log(lvl::info,"Server stopped");
+}
+
+std::string core::forget(const std::string&id) {
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    auto it=mah_.find(id);
+    if (it==mah_.end()) return "unknown";
+    if (std::string(status_of(it->second,now_ms()))!="offline") return "online";
+    mah_.erase(it);
+  }
+  log(lvl::info,"Removed "+id+" from the list (offline). It comes back when its agent sends data again.");
+  return "";
 }
 
 netif core::net() const {std::lock_guard<std::mutex> lock(mu_); return net_;}

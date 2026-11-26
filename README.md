@@ -128,6 +128,25 @@ Server options (`server` only; `server_gui` uses the defaults):
 ```
 
 Test: `tests/baseline_test.py` (see the docstring); results are in `docs/`.
+## Offline computers
+
+A computer is offline when it has sent nothing for 30 seconds. Its card says how long:
+"No data for 45 s", "12 min", "3 h 5 min", "2 days 4 h" (the server window's Last
+update column counts the same way).
+
+An offline card has **Remove from dashboard**, for a computer that is switched off for
+good or was only used for a test. After you confirm, it disappears from the dashboards and
+the server window. Its history and baseline are kept. It comes back by itself as soon as
+its agent sends data again; to add it back, run the agent on that computer (the dashboard
+shows the exact command):
+
+```
+./agent --host <server-ip> --id <computer-id>
+```
+
+Only offline computers can be removed (the server refuses one that is still sending), so
+this is allowed from any PC. The dashboard calls `POST /forget` with `{"id": "..."}`.
+
 ## Seat map
 
 The dashboard can show the room as a seat map, each seat colored by status. The map is
