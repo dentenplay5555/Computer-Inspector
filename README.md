@@ -130,23 +130,54 @@ Server options (`server` only; `server_gui` uses the defaults):
 Test: `tests/baseline_test.py` (see the docstring); results are in `docs/`.
 ## Seat map
 
-The dashboard can show the room as a seat map, each seat colored by status. Write a
-`layout.json` and put it **in the same folder as the server executable** (for example
-`build/layout.json`). Start from `layout.example.json`:
+The dashboard can show the room as a seat map, each seat colored by status. The map is
+the file `layout.json` **in the same folder as the server executable** (for example
+`build/layout.json`).
+
+### Editing in the dashboard
+
+Open **Room map** and press **Create seat map** (or **Edit map** when one exists). The map
+is made of blocks on a grid:
+
+- **Seat:** one computer, one cell. Computers that are connected but not placed yet are
+  listed beside the map; click one to add it, or type an ID to add a seat for a computer
+  that is not on yet.
+- **Empty space:** any size, with an optional label such as "aisle" or "teacher's desk".
+  Use it for gaps in the room. Drag its bottom-right corner, or use Width / Height, to resize it.
+
+Drag a block to move it, or select it and click the cell it should go to. With the
+keyboard: arrows move the selected block, Shift+arrows resize an empty space, Delete
+removes it. Columns and Rows change the size of the room. Blocks never overlap.
+
+**Save** writes `layout.json` next to the server. To stop other PCs on the LAN from
+changing the room, saving only works in a browser on the server computer itself. On any
+other PC, use **Download file** and copy the file there. `run.sh` / `run.bat` copy a
+`./layout.json` from the repository root only when it is newer, so a saved map is kept.
+
+### File format
+
+Written by the editor, or by hand (start from `layout.example.json`):
 
 ```
-{"cols": 6, "seats": {"A-01": [0, 0], "A-02": [1, 0], "B-01": [0, 1]}}
+{
+  "cols": 6,
+  "rows": 4,
+  "seats": {"A-01": [0, 0], "A-02": [1, 0], "B-01": [0, 1]},
+  "spaces": [{"c": 2, "r": 0, "w": 1, "h": 4, "label": "aisle"}]
+}
 ```
 
-- Each key is a computer's id (the agent's `--id`, or its hostname by default).
-- Each value is `[column, row]`, counted from 0. Row 0 is the front of the room.
+- `seats`: each key is a computer's id (the agent's `--id`, or its hostname by default);
+  each value is `[column, row]`, counted from 0. Row 0 is the front of the room.
+- `rows` (optional): room depth, so empty back rows are kept. Up to 30 columns and 50 rows.
+- `spaces` (optional): empty blocks at column `c`, row `r`, `w` cells wide and `h` deep.
 - Seats with no computer reporting show grey and dashed; computers that are not in the
   file are listed under "ไม่อยู่ในผัง" (not in the layout).
-- Without the file, or if it is invalid (bad numbers, two computers on one seat), the
-  dashboard stays in card view and says why.
+- If the file is invalid (out of range, two blocks overlapping), the dashboard says so and
+  the editor can make a new one. The server checks the same rules before saving.
 
-The server only serves this one path (`/layout.json`); the file is read again on every
-page load, so edits show after a refresh.
+The server only serves this one path (`/layout.json`, GET to read, POST to save); the file
+is read again on every page load.
 
 ## Privacy
  

@@ -7,7 +7,7 @@
 #   ./run.sh --no-browser do not open the browser
 #
 # Ctrl+C stops everything this script started.
-# If ./layout.json exists (seat map), it is copied next to the server first.
+# If ./layout.json exists (seat map) and is newer, it is copied next to the server first.
 set -e
 cd "$(dirname "$0")"
 
@@ -28,7 +28,8 @@ if [ "$BUILD" = 1 ]; then
   cmake --build build --target server agent
 fi
 [ -x build/server ] || { echo "build/server not found. Run without --no-build first."; exit 1; }
-[ -f layout.json ] && cp layout.json build/layout.json
+# copy the seat map only when it is newer, so a map saved from the dashboard editor is kept
+if [ -f layout.json ] && [ layout.json -nt build/layout.json ]; then cp layout.json build/layout.json; fi
 
 PIDS=""
 stop() {
