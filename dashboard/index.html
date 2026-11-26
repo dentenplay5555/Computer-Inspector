@@ -284,7 +284,7 @@
     .ask h2 { margin: 0 0 6px; font-size: 18px; line-height: 1.3; }
     .ask p { margin: 0; color: var(--muted); font-size: 15px; }
     .ask .acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
-    .ask code, .notice code {
+    .ask code {
       display: block;
       margin-top: 10px;
       padding: 8px 12px;
@@ -312,8 +312,33 @@
     .notice p { margin: 0; }
     .notice.bad { border-left-color: var(--crit); }
     .notice.bad p { color: var(--crit); font-weight: 600; }
-    .offrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; margin-bottom: 6px; }
-    .btn.rm { min-height: 40px; padding: 0 12px; font-size: 14px; }
+    .offrow { margin-bottom: 6px; }
+    .head .side { display: flex; align-items: center; gap: 6px; flex: none; }
+    .btn.edit { width: 40px; min-height: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+    .btn.edit svg { width: 18px; height: 18px; }
+    .desc { margin: -4px 0 10px; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; white-space: pre-line; }
+    .notice .nacts { display: flex; flex-wrap: wrap; gap: 8px; flex: none; }
+    /* computers removed on the dashboard */
+    #removed { margin-top: 18px; }
+    #removed ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+    #removed li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+    #removed li .meta { margin-right: auto; }
+    /* computer details pop-up */
+    .ask label { display: block; font-size: 14px; font-weight: 600; margin: 14px 0 4px; }
+    .ask input[type="text"], .ask textarea {
+      width: 100%;
+      min-height: 44px;
+      padding: 8px 12px;
+      border: 1px solid var(--off-line);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+    }
+    .ask textarea { resize: vertical; }
+    .ask .small { margin-top: 4px; }
+    .ask .err { color: var(--crit); font-weight: 600; font-size: 14px; margin: 10px 0 0; min-height: 0; }
+    .ask .acts .grow { flex: 1; }
     .room.ed .cell { border: 1px dashed var(--off-line); border-radius: 10px; }
     .blk {
       position: relative;
@@ -399,8 +424,11 @@
     </section>
     <div class="banner" id="lost" hidden></div>
     <div class="notice" id="notice" role="status" hidden>
-      <div><p id="noticep"></p><code id="noticec" hidden></code></div>
-      <button type="button" class="btn" id="noticex"></button>
+      <div><p id="noticep"></p></div>
+      <div class="nacts">
+        <button type="button" class="btn" id="noticea" hidden></button>
+        <button type="button" class="btn" id="noticex"></button>
+      </div>
     </div>
     <p class="note" id="lnote" hidden></p>
     <div class="mapbar" id="mapbar" hidden>
@@ -409,7 +437,26 @@
     </div>
     <div id="grid"></div>
     <div id="map" hidden></div>
+    <section class="panel" id="removed" hidden></section>
     <div id="ed" hidden></div>
+    <dialog class="ask" id="mdlg" aria-labelledby="mq">
+      <form id="mform" novalidate>
+        <h2 id="mq"></h2>
+        <p class="small" id="mid"></p>
+        <label for="mname" id="mnamel"></label>
+        <input type="text" id="mname" maxlength="40" autocomplete="off">
+        <p class="small" id="mnameh"></p>
+        <label for="mdesc" id="mdescl"></label>
+        <textarea id="mdesc" maxlength="200" rows="3"></textarea>
+        <p class="err" id="merr" role="alert"></p>
+        <div class="acts">
+          <button type="button" class="btn danger" id="mrm"></button>
+          <span class="grow"></span>
+          <button type="button" class="btn" id="mcancel"></button>
+          <button type="submit" class="btn primary" id="msave"></button>
+        </div>
+      </form>
+    </dialog>
     <dialog class="ask" id="askdlg" aria-labelledby="askq" aria-describedby="askp">
       <h2 id="askq"></h2>
       <p id="askp"></p>
@@ -436,10 +483,16 @@
       down: "รับ", up: "ส่ง", noData: d => `ไม่ได้รับข้อมูลมา ${d}`,
       unit: { s: "วินาที", m: "นาที", h: "ชั่วโมง", d: () => "วัน" },
       removeBtn: "เอาออกจากแดชบอร์ด", rmTitle: id => `เอา ${id} ออกจากแดชบอร์ด?`,
-      rmBody: "เครื่องนี้จะกลับมาเองทันทีที่ agent ส่งข้อมูลอีกครั้ง และประวัติของเครื่องยังเก็บไว้ หากต้องการเพิ่มกลับ ให้รันคำสั่งนี้บนเครื่องนั้น:",
+      rmBody: "เครื่องนี้จะถูกซ่อน และเซิร์ฟเวอร์จะไม่รับข้อมูลจากเครื่องนี้จนกว่าจะกด เพิ่มกลับ ในรายการ เครื่องที่เอาออก ด้านล่างของหน้านี้ ประวัติของเครื่องยังเก็บไว้",
       rmYes: "เอาออก", rmNo: "ยกเลิก",
-      rmDone: id => `เอา ${id} ออกแล้ว หากต้องการเพิ่มกลับ ให้รันคำสั่งนี้บนเครื่องนั้น เครื่องจะกลับมาเองเมื่อ agent ส่งข้อมูล:`,
-      rmOnline: id => `${id} ยังส่งข้อมูลอยู่ จึงไม่ได้เอาออก`, rmFail: id => `เอา ${id} ออกไม่สำเร็จ`, close: "ปิด",
+      rmDone: id => `เอา ${id} ออกแล้ว เพิ่มกลับได้ด้วยปุ่ม เพิ่มกลับ ตรงนี้ หรือในรายการ เครื่องที่เอาออก ด้านล่างของหน้า`,
+      rmFail: id => `เอา ${id} ออกไม่สำเร็จ`, close: "ปิด",
+      removedTitle: n => `เครื่องที่เอาออก (${n})`, removedHint: "เซิร์ฟเวอร์ไม่รับข้อมูลจากเครื่องเหล่านี้จนกว่าจะเพิ่มกลับ",
+      addBack: "เพิ่มกลับ", backDone: id => `เพิ่ม ${id} กลับแล้ว จะแสดงอีกครั้งเมื่อ agent ของเครื่องส่งข้อมูล`,
+      backFail: id => `เพิ่ม ${id} กลับไม่สำเร็จ`, localOnly: id => `ทำได้เฉพาะบนเครื่องที่รัน server`,
+      editBtn: id => `แก้ไข ${id}`, mName: "ชื่อที่แสดง", mNameHint: "เว้นว่างไว้เพื่อแสดงรหัสเครื่อง",
+      mDesc: "คำอธิบาย", mIdNote: id => `รหัสเครื่อง: ${id} (ใช้ในผังที่นั่งและคำสั่ง agent เปลี่ยนไม่ได้จากที่นี่)`,
+      mSave: "บันทึก", mCancel: "ยกเลิก", mSaveFail: "บันทึกไม่สำเร็จ",
       learning: "กำลังเรียนรู้ค่าปกติของเครื่องนี้ (ยังไม่แจ้งเตือน)",
       histLoading: "กำลังโหลดประวัติ...", histErr: "โหลดประวัติไม่ได้ จะลองใหม่อัตโนมัติ",
       histFew: "ยังมีข้อมูลไม่พอสำหรับกราฟ (เก็บทุก 10 วินาที)",
@@ -481,10 +534,16 @@
       down: "Down", up: "Up", noData: d => `No data for ${d}`,
       unit: { s: "s", m: "min", h: "h", d: n => n === 1 ? "day" : "days" },
       removeBtn: "Remove from dashboard", rmTitle: id => `Remove ${id} from the dashboard?`,
-      rmBody: "It comes back by itself as soon as its agent sends data again, and its history is kept. To add it back, run this on that computer:",
+      rmBody: "It is hidden, and the server ignores its data, until you press Add back under Removed computers at the bottom of this page. Its history is kept.",
       rmYes: "Remove", rmNo: "Cancel",
-      rmDone: id => `${id} was removed. To add it back, run this on that computer; it reappears as soon as the agent sends data:`,
-      rmOnline: id => `${id} is sending data again, so it was not removed`, rmFail: id => `Could not remove ${id}`, close: "Close",
+      rmDone: id => `${id} was removed. To add it back, press Add back here, or under Removed computers at the bottom of the page.`,
+      rmFail: id => `Could not remove ${id}`, close: "Close",
+      removedTitle: n => `Removed computers (${n})`, removedHint: "The server ignores these computers' data until you add them back.",
+      addBack: "Add back", backDone: id => `${id} was added back. It shows again when its agent sends data.`,
+      backFail: id => `Could not add ${id} back`, localOnly: id => `Only possible on the server computer`,
+      editBtn: id => `Edit ${id}`, mName: "Display name", mNameHint: "Leave empty to show the computer ID",
+      mDesc: "Description", mIdNote: id => `Computer ID: ${id} (used by the seat map and the agent command; it cannot be changed here)`,
+      mSave: "Save", mCancel: "Cancel", mSaveFail: "Could not save",
       learning: "Learning this computer's normal usage (no alerts yet)",
       histLoading: "Loading history...", histErr: "Could not load history, retrying automatically",
       histFew: "Not enough data for graphs yet (saved every 10 s)",
@@ -539,7 +598,9 @@
   let layout = null;            // checked layout.json, or null
   let layoutNote = null;        // key of the note to show about layout.json
   let mapMsg = null;            // short "saved" message next to the Edit button
-  let notice = null;            // {key, id, cmd, bad} shown under the status strip after a removal
+  let notice = null;            // {key, id, bad, act} shown under the status strip after remove / add back
+  let can = false;              // this browser may manage computers (it is on the server computer)
+  const nm = m => m.name || m.id;
   const t = () => TXT[lang];
 
   // ---------- history graphs (fetched every 10 s per machine from /history) ----------
@@ -603,14 +664,16 @@
   function card(m) {
     const T = t(), st = STATES.includes(m.status) ? m.status : "offline";
     const off = st === "offline";
-    const meta = [m.ip, m.os].filter(Boolean).map(esc).join(" · ");
+    const meta = [m.name ? m.id : "", m.ip, m.os].filter(Boolean).map(esc).join(" · ");
+    const edit = can ? `<button type="button" class="btn edit" data-key="edit:${esc(m.id)}"
+      aria-label="${esc(T.editBtn(nm(m)))}" title="${esc(T.editBtn(nm(m)))}">${ICON.pencil}</button>` : "";
     return `<article class="card ${st}">
       <div class="head">
-        <div><div class="name">${esc(m.id)}</div><div class="meta">${meta}</div></div>
-        <span class="state ${st}"><span class="dot"></span>${esc(T[st])}</span>
+        <div><div class="name">${esc(nm(m))}</div><div class="meta">${meta}</div></div>
+        <div class="side"><span class="state ${st}"><span class="dot"></span>${esc(T[st])}</span>${edit}</div>
       </div>
-      ${off ? `<div class="offrow"><span class="small">${esc(T.noData(fmtDur(m.age)))}</span>
-        <button type="button" class="btn rm" data-rm="${esc(m.id)}">${esc(T.removeBtn)}</button></div>` : ""}
+      ${m.desc ? `<p class="desc">${esc(m.desc)}</p>` : ""}
+      ${off ? `<div class="offrow small">${esc(T.noData(fmtDur(m.age)))}</div>` : ""}
       <div class="metrics">
         ${meter("CPU", m.cpu, off ? 999 : 80, off ? 999 : 90)}
         ${meter("RAM", m.ram, off ? 999 : 80, off ? 999 : 90)}
@@ -693,12 +756,12 @@
         : (Array.isArray(m.abn) && m.abn.length) ? `<span class="flag">${esc(T.abn)}</span>`
         : `<span>CPU ${Number(m.cpu).toFixed(0)}%</span>`;
       return `<div class="seat ${st}" style="grid-column:${s.c + 1};grid-row:${s.r + 1}">
-        <b>${esc(s.id)}</b><span>${esc(info)}</span>${extra}</div>`;
+        <b>${esc(m && m.name ? m.name : s.id)}</b><span>${esc(info)}</span>${extra}</div>`;
     }).join("");
     const out = ms.filter(m => !inLayout.has(m.id));
     const outside = out.length
       ? `<div class="outside"><h2>${esc(T.outside)} (${out.length})</h2><ul>${out.map(m =>
-          `<li class="${esc(m.status)}"><span class="dot"></span>${esc(m.id)}: ${esc(T[m.status] || m.status)}</li>`).join("")}</ul></div>`
+          `<li class="${esc(m.status)}"><span class="dot"></span>${esc(nm(m))}: ${esc(T[m.status] || m.status)}</li>`).join("")}</ul></div>`
       : "";
     return `<div id="mapwrap" tabindex="0" role="region" aria-label="${esc(T.mapLabel)}"><div class="front">${esc(T.front)}</div>
       <div class="room" style="grid-template-columns:repeat(${layout.cols},minmax(84px,1fr));grid-template-rows:repeat(${layout.rows},minmax(64px,auto))">${labels}${tiles}</div></div>${outside}`;
@@ -1134,41 +1197,101 @@
     if (done) done(v);
   }
 
-  // ---------- removing an offline computer ----------
-  function agentCmd(id) {
-    const host = location.hostname || "<server-ip>";
-    const q = /^[\w.-]+$/.test(id) ? id : `"${id.replace(/["\\]/g, "\\$&")}"`;
-    return `./agent --host ${host} --id ${q}`;
+  // ---------- managing computers: name, description, remove, add back ----------
+  // Only on the server computer (GET /me says so); the server checks again on every change.
+  async function post(path, body) {
+    try {
+      const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
+      const j = await r.json().catch(() => null);
+      return { ok: r.ok && !!j && j.ok === true, status: r.status, error: j && j.error };
+    } catch (e) { return { ok: false, status: 0 }; }
+  }
+  const editBtnOf = id => [...document.querySelectorAll("button[data-key]")].find(b => b.dataset.key === "edit:" + id);
+  let mId = null;               // computer open in the details pop-up
+  function openEdit(id) {
+    const T = t(), m = lastDt && lastDt.machines.find(x => x.id === id);
+    if (!m) return;
+    mId = id;
+    $("mq").textContent = nm(m);
+    $("mid").textContent = T.mIdNote(id);
+    $("mnamel").textContent = T.mName;
+    $("mnameh").textContent = T.mNameHint;
+    $("mdescl").textContent = T.mDesc;
+    $("mrm").textContent = T.removeBtn;
+    $("mcancel").textContent = T.mCancel;
+    $("msave").textContent = T.mSave;
+    $("mname").value = m.name || "";
+    $("mname").placeholder = id;
+    $("mdesc").value = m.desc || "";
+    $("merr").textContent = "";
+    $("mdlg").showModal();
+    $("mname").focus();
+  }
+  function closeEdit(refocus) {
+    const id = mId;
+    mId = null;
+    if ($("mdlg").open) $("mdlg").close();
+    if (refocus && id) { const b = editBtnOf(id); if (b) b.focus(); }
+  }
+  async function saveEdit() {
+    const id = mId, name = $("mname").value.trim(), desc = $("mdesc").value.trim();
+    if (!id) return;
+    $("msave").disabled = true;
+    const r = await post("/meta", { id, name, desc });
+    $("msave").disabled = false;
+    if (!r.ok) {
+      $("merr").textContent = t().mSaveFail + (r.status === 403 ? ": " + t().localOnly() : r.error ? ": " + r.error : "");
+      return;
+    }
+    const m = lastDt && lastDt.machines.find(x => x.id === id);
+    if (m) { m.name = name; m.desc = desc; }
+    render();
+    closeEdit(true);
   }
   async function removeMachine(id) {
     const T = t();
-    const ok = await ask({ title: T.rmTitle(id), body: T.rmBody, code: agentCmd(id), yes: T.rmYes, no: T.rmNo,
-      back: () => [...document.querySelectorAll("button[data-rm]")].find(b => b.dataset.rm === id) });
+    closeEdit(false);
+    const m = lastDt && lastDt.machines.find(x => x.id === id), label = m ? nm(m) : id;
+    const ok = await ask({ title: T.rmTitle(label), body: T.rmBody, yes: T.rmYes, no: T.rmNo, back: () => editBtnOf(id) });
     if (!ok) return;
-    let r = null, j = null;
-    try {
-      r = await fetch("/forget", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }), cache: "no-store" });
-      j = await r.json().catch(() => null);
-    } catch (e) {}
-    if (r && r.ok && j && j.ok === true) {
-      if (lastDt) lastDt.machines = lastDt.machines.filter(m => m.id !== id);
-      notice = { key: "rmDone", id, cmd: agentCmd(id) };
-    } else {
-      notice = { key: r && r.status === 409 ? "rmOnline" : "rmFail", id, bad: true };
-    }
+    const r = await post("/forget", { id });
+    if (r.ok) {
+      if (lastDt) {
+        lastDt.machines = lastDt.machines.filter(x => x.id !== id);
+        lastDt.removed = [...(lastDt.removed || []).filter(x => x.id !== id), { id, name: m ? m.name : "" }];
+      }
+      notice = { key: "rmDone", id: label, act: { label: "addBack", id } };
+    } else notice = { key: "rmFail", id: label, bad: true };
+    render();
+    $(notice.act ? "noticea" : "noticex").focus();
+  }
+  async function restoreMachine(id) {
+    const r = await post("/restore", { id });
+    const x = lastDt && (lastDt.removed || []).find(y => y.id === id), label = x && x.name ? x.name : id;
+    if (r.ok) {
+      if (lastDt) lastDt.removed = (lastDt.removed || []).filter(y => y.id !== id);
+      notice = { key: "backDone", id: label };
+    } else notice = { key: "backFail", id: label, bad: true };
     render();
     $("noticex").focus();
   }
+  function removedHTML() {
+    const T = t(), list = lastDt && Array.isArray(lastDt.removed) ? lastDt.removed : [];
+    if (!list.length) return "";
+    return `<h2>${esc(T.removedTitle(list.length))}</h2><p class="small">${esc(T.removedHint)}</p><ul>${list.map(x =>
+      `<li><b>${esc(x.name || x.id)}</b><span class="meta">${x.name ? esc(x.id) : ""}</span>${can
+        ? `<button type="button" class="btn" data-key="back:${esc(x.id)}">${esc(T.addBack)}</button>` : ""}</li>`).join("")}</ul>`;
+  }
 
   // Cards are redrawn every second. Skip a redraw that changes nothing, never redraw under a
-  // pressed mouse button (the click would be lost), and keep focus on a Remove button.
-  let pressing = false;
+  // pressed mouse button (the click would be lost), and keep focus on a button that has it.
+  let pressed = null;           // element under a pressed mouse button
   function setHTML(el, html) {
-    if (el._html === html || (pressing && el === $("grid"))) return;
-    const f = document.activeElement, rm = f && el.contains(f) && f.dataset ? f.dataset.rm : null;
+    if (el._html === html || (pressed && el.contains(pressed))) return;
+    const f = document.activeElement, key = f && el.contains(f) && f.dataset ? f.dataset.key : null;
     el.innerHTML = html;
     el._html = html;
-    if (rm) for (const b of el.querySelectorAll("button[data-rm]")) if (b.dataset.rm === rm) b.focus();
+    if (key) for (const b of el.querySelectorAll("[data-key]")) if (b.dataset.key === key) b.focus();
   }
 
   // ---------- page ----------
@@ -1194,14 +1317,17 @@
     $("conntext").textContent = T[conn === "lost" ? "connecting" : conn];
     $("lost").hidden = conn !== "lost";
     $("lost").textContent = T.lost;
-    // the removed computer is back: the "how to add it back" notice has done its job
-    if (notice && notice.key === "rmDone" && lastDt && lastDt.machines.some(m => m.id === notice.id)) notice = null;
+    // added back elsewhere (another tab): the "add it back" notice has done its job
+    if (notice && notice.act && lastDt && !(lastDt.removed || []).some(x => x.id === notice.act.id)) notice = null;
     $("notice").hidden = !notice;
     $("notice").classList.toggle("bad", !!(notice && notice.bad));
     $("noticep").textContent = notice ? T[notice.key](notice.id) : "";
-    $("noticec").textContent = notice && notice.cmd ? notice.cmd : "";
-    $("noticec").hidden = !(notice && notice.cmd);
+    $("noticea").hidden = !(notice && notice.act && can);
+    $("noticea").textContent = notice && notice.act ? T[notice.act.label] : "";
     $("noticex").textContent = T.close;
+    const rh = ed ? "" : removedHTML();
+    $("removed").hidden = !rh;
+    setHTML($("removed"), rh);
 
     const ms = lastDt ? lastDt.machines : [];
     const n = { ok: 0, warn: 0, crit: 0, offline: 0 };
@@ -1254,12 +1380,26 @@
   $("askdlg").addEventListener("cancel", e => { e.preventDefault(); answer(false); });   // Esc
   $("askdlg").addEventListener("close", () => { if (askDone) answer(false); });
   $("grid").addEventListener("click", e => {
-    const b = e.target.closest("button[data-rm]");
-    if (b) removeMachine(b.dataset.rm);
+    const b = e.target.closest("button[data-key^='edit:']");
+    if (b) openEdit(b.dataset.key.slice(5));
   });
-  $("grid").addEventListener("pointerdown", () => { pressing = true; });
-  for (const ev of ["pointerup", "pointercancel"]) addEventListener(ev, () => { pressing = false; }, true);
+  $("removed").addEventListener("click", e => {
+    const b = e.target.closest("button[data-key^='back:']");
+    if (b) restoreMachine(b.dataset.key.slice(5));
+  });
+  addEventListener("pointerdown", e => { pressed = e.target; }, true);
+  for (const ev of ["pointerup", "pointercancel"]) addEventListener(ev, () => { pressed = null; }, true);
   $("noticex").addEventListener("click", () => { notice = null; render(); });
+  $("noticea").addEventListener("click", () => { if (notice && notice.act) restoreMachine(notice.act.id); });
+  // details pop-up: Esc, Cancel and the backdrop close it without saving
+  $("mform").addEventListener("submit", e => { e.preventDefault(); saveEdit(); });
+  $("mcancel").addEventListener("click", () => closeEdit(true));
+  $("mrm").addEventListener("click", () => { if (mId) removeMachine(mId); });
+  $("mdlg").addEventListener("cancel", e => { e.preventDefault(); closeEdit(true); });
+  $("mdlg").addEventListener("click", e => {
+    const r = $("mdlg").getBoundingClientRect();
+    if (e.target === $("mdlg") && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) closeEdit(true);
+  });
   addEventListener("beforeunload", e => { if (ed && ed.dirty) { e.preventDefault(); e.returnValue = ""; } });
 
   function connect() {
@@ -1279,6 +1419,7 @@
   render();
   loadLayout();
   connect();
+  fetch("/me", { cache: "no-store" }).then(r => r.json()).then(j => { can = j && j.local === true; render(); }).catch(() => {});
   </script>
 </body>
 </html>

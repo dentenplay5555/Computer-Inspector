@@ -8,6 +8,7 @@
 #include <thread>
 #include <unordered_set>
 #include <map>
+#include <set>
 #include <vector>
 #include "netinfo.hpp"
 #include "history.hpp"
@@ -17,6 +18,7 @@ namespace ix { class WebSocketServer; class HttpServer; }
 // Latest numbers reported by one agent.
 struct mah {
   std::string id,ip,os;
+  std::string name,desc;   // set by the teacher on the dashboard (machines.json); may be empty
   double cpu=0,ram=0,disk=0,rx=0,tx=0;
   int64_t l_s=0;
 };
@@ -49,10 +51,17 @@ public:
   std::vector<mah> machines() const;
   int dash_count() const;
   int agent_count() const;
-  // Takes an offline computer off the list (dashboards, the window). It comes back by itself
-  // when its agent sends data again; its history and baseline are kept for that.
-  // Returns "" when removed, else "unknown" or "online".
+  // Takes a computer off the list (dashboards, the window), online or not. Its data is then
+  // ignored until restore(); its history and baseline are kept. "" when done, else "unknown".
   std::string forget(const std::string&id);
+  // Puts a removed computer back; it shows again when its agent next sends data.
+  std::string restore(const std::string&id);
+  // Display name and description (empty clears). "" when done, else "unknown" or "too long".
+  std::string set_meta(const std::string&id,const std::string&name,const std::string&desc);
+  struct removed_pc {std::string id,name;};
+  std::vector<removed_pc> removed() const;
+  // The browser is on this computer (loopback, or this computer's own LAN address).
+  bool is_local(const std::string&ip) const;
   // Abnormal values ("cpu", "rx", "tx") and learning state; empty/false before the first start().
   std::vector<std::string> abnormal(const std::string&id,int64_t now) const;
   bool learning(const std::string&id,int64_t now) const;
@@ -69,6 +78,15 @@ private:
   std::unique_ptr<ix::WebSocketServer> wsr_;
   std::unique_ptr<ix::HttpServer> http_;
   std::unique_ptr<history> hist_;  // has its own lock; never call it while holding mu_
+
+  // names, descriptions and removed computers, kept in machines.json next to the executable
+  struct meta {std::string name,desc;};
+  std::map<std::string,meta> meta_;  // guarded by mu_
+  std::set<std::string> removed_;    // guarded by mu_
+  bool meta_loaded_=false;
+  std::mutex io_;                    // serializes writes of machines.json
+  void load_meta();
+  void save_meta();                  // takes mu_ itself; never call while holding it
   std::thread th_;
   std::atomic<bool> run_{false};
 };
