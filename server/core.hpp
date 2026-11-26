@@ -49,6 +49,10 @@ public:
   std::vector<mah> machines() const;
   int dash_count() const;
   int agent_count() const;
+  // Takes an offline computer off the list (dashboards, the window). It comes back by itself
+  // when its agent sends data again; its history and baseline are kept for that.
+  // Returns "" when removed, else "unknown" or "online".
+  std::string forget(const std::string&id);
   // Abnormal values ("cpu", "rx", "tx") and learning state; empty/false before the first start().
   std::vector<std::string> abnormal(const std::string&id,int64_t now) const;
   bool learning(const std::string&id,int64_t now) const;
