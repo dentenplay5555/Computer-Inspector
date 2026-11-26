@@ -270,20 +270,20 @@
     .edhint { color: var(--muted); font-size: 14px; margin: 10px 0 0; }
     #ed-msg { min-height: 1.5em; margin: 4px 0 10px; font-size: 14px; color: var(--muted); }
     #ed-msg.bad { color: var(--crit); font-weight: 600; }
-    /* asked in the page, not with confirm(): some browsers block or auto-answer dialogs */
-    .edask {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px 12px;
-      margin-top: 10px;
-      padding: 10px 14px;
-      background: var(--warn-bg);
-      border: 1px solid var(--warn-line);
-      border-radius: 12px;
-      font-weight: 600;
+    /* the page's own pop-up (<dialog>), not confirm(): some browsers block or auto-answer those */
+    .ask {
+      width: min(420px, calc(100vw - 32px));
+      padding: 20px 22px 18px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      color: var(--text);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, .28);
     }
-    .edask span { margin-right: auto; }
+    .ask::backdrop { background: rgba(10, 14, 15, .45); }
+    .ask h2 { margin: 0 0 6px; font-size: 18px; line-height: 1.3; }
+    .ask p { margin: 0; color: var(--muted); font-size: 15px; }
+    .ask .acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
     .room.ed .cell { border: 1px dashed var(--off-line); border-radius: 10px; }
     .blk {
       position: relative;
@@ -376,6 +376,14 @@
     <div id="grid"></div>
     <div id="map" hidden></div>
     <div id="ed" hidden></div>
+    <dialog class="ask" id="askdlg" aria-labelledby="askq" aria-describedby="askp">
+      <h2 id="askq"></h2>
+      <p id="askp"></p>
+      <div class="acts">
+        <button type="button" class="btn" id="ed-keep"></button>
+        <button type="button" class="btn danger" id="ed-discard"></button>
+      </div>
+    </dialog>
   </main>
 
   <script>
@@ -418,7 +426,7 @@
       noRoom: "ไม่มีช่องว่างเหลือ เพิ่มคอลัมน์หรือแถวก่อน",
       noFit: "วางตรงนั้นไม่ได้: ชนบล็อกอื่นหรือเกินขอบห้อง",
       idTaken: "รหัสนี้อยู่ในผังแล้ว", textEmpty: "ใส่ข้อความบนป้าย หรือลบป้ายนี้ออก", idEmpty: "ต้องใส่รหัสเครื่อง", idLong: "รหัสเครื่องยาวเกิน 64 ตัวอักษร",
-      discard: "ทิ้งการแก้ไขที่ยังไม่ได้บันทึก?", discardYes: "ทิ้งการแก้ไข", keep: "แก้ไขต่อ",
+      discard: "ทิ้งการแก้ไขที่ยังไม่ได้บันทึก?", discardHint: "ผังที่บันทึกไว้จะไม่เปลี่ยน", discardYes: "ทิ้งการแก้ไข", keep: "แก้ไขต่อ",
     },
     en: {
       subtitle: "Teacher dashboard", cards: "Cards", map: "Room map",
@@ -457,7 +465,7 @@
       noRoom: "No free cell left. Add a column or a row first",
       noFit: "Cannot go there: it overlaps another block or leaves the room",
       idTaken: "That ID is already in the map", textEmpty: "Type the label text, or remove the label", idEmpty: "Type a computer ID", idLong: "Computer IDs can be at most 64 characters",
-      discard: "Discard the changes you have not saved?", discardYes: "Discard changes", keep: "Keep editing",
+      discard: "Discard the changes you have not saved?", discardHint: "The saved seat map stays as it is.", discardYes: "Discard changes", keep: "Keep editing",
     },
   };
   const STATES = ["ok", "warn", "crit", "offline"];
@@ -654,10 +662,16 @@
   function edStop(force) {
     if (!ed) return;
     if (ed.dirty && !force) {           // ask first; "Keep editing" is the safe default
-      $("ed-ask").hidden = false;
+      const T = t();
+      $("askq").textContent = T.discard;
+      $("askp").textContent = T.discardHint;
+      $("ed-keep").textContent = T.keep;
+      $("ed-discard").textContent = T.discardYes;
+      $("askdlg").showModal();
       $("ed-keep").focus();
       return;
     }
+    if ($("askdlg").open) $("askdlg").close();
     ed = null; drag = null;
     render();
     $("edopen").focus();
@@ -720,11 +734,6 @@
           <button type="button" class="btn primary" id="ed-save">${esc(T.save)}</button>
         </div>
       </div>
-      <div class="edask" id="ed-ask" role="group" aria-labelledby="ed-askq" hidden>
-        <span id="ed-askq">${esc(T.discard)}</span>
-        <button type="button" class="btn" id="ed-keep">${esc(T.keep)}</button>
-        <button type="button" class="btn danger" id="ed-discard">${esc(T.discardYes)}</button>
-      </div>
       <p class="edhint">${esc(T.edHint)}</p>
       <p id="ed-msg" role="status" aria-live="polite"></p>
       <div class="mapwrap"><div class="front">${esc(T.front)}</div>
@@ -753,11 +762,6 @@
       else if (b.id === "ed-cancel") edStop(false);
       else if (b.id === "ed-save") edSave();
     });
-    $("ed-discard").addEventListener("click", () => edStop(true));
-    $("ed-keep").addEventListener("click", () => { $("ed-ask").hidden = true; $("ed-cancel").focus(); });
-    $("ed-ask").addEventListener("keydown", e => {
-      if (e.key === "Escape") { e.preventDefault(); $("ed-ask").hidden = true; $("ed-cancel").focus(); }
-    });
     $("ed-tray").addEventListener("click", e => {
       const b = e.target.closest("button[data-add]");
       if (b) edAddSeat(b.dataset.add);
@@ -778,7 +782,6 @@
     const act = document.activeElement;
     const actBlk = act && act.classList && act.classList.contains("blk");
     const actId = act && act.id;
-    $("ed-ask").hidden = true;
     $("ed-cv").textContent = ed.cols;
     $("ed-rv").textContent = ed.rows;
     let h = "";
@@ -1115,6 +1118,14 @@
   $("lang").addEventListener("click", () => { lang = lang === "th" ? "en" : "th"; store.set("ci-lang", lang); render(); });
   $("theme").addEventListener("click", () => { theme = theme === "dark" ? "light" : "dark"; store.set("ci-theme", theme); render(); });
   $("edopen").addEventListener("click", edStart);
+  // discard question: Esc, the backdrop and "Keep editing" all mean keep editing
+  $("ed-discard").addEventListener("click", () => edStop(true));
+  $("ed-keep").addEventListener("click", () => $("askdlg").close());
+  $("askdlg").addEventListener("click", e => {
+    const r = $("askdlg").getBoundingClientRect();     // a click on the dialog's own padding also targets it
+    if (e.target === $("askdlg") && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) $("askdlg").close();
+  });
+  $("askdlg").addEventListener("close", () => { if (ed && $("ed-cancel")) $("ed-cancel").focus(); });
   addEventListener("beforeunload", e => { if (ed && ed.dirty) { e.preventDefault(); e.returnValue = ""; } });
 
   function connect() {
