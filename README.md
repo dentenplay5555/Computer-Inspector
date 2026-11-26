@@ -142,11 +142,12 @@ is made of blocks on a grid:
 - **Seat:** one computer, one cell. Computers that are connected but not placed yet are
   listed beside the map; click one to add it, or type an ID to add a seat for a computer
   that is not on yet.
-- **Empty space:** any size, with an optional label such as "aisle" or "teacher's desk".
-  Use it for gaps in the room. Drag its bottom-right corner, or use Width / Height, to resize it.
+- **Label:** text on the map, any size, such as "aisle" or "teacher's desk". Gaps need no
+  block, since any cell without a seat is already empty; a label only says what is there.
+  Drag its bottom-right corner, or use Width / Height, to resize it.
 
 Drag a block to move it, or select it and click the cell it should go to. With the
-keyboard: arrows move the selected block, Shift+arrows resize an empty space, Delete
+keyboard: arrows move the selected block, Shift+arrows resize a label, Delete
 removes it. Columns and Rows change the size of the room. Blocks never overlap.
 
 **Save** writes `layout.json` next to the server. To stop other PCs on the LAN from
@@ -163,14 +164,15 @@ Written by the editor, or by hand (start from `layout.example.json`):
   "cols": 6,
   "rows": 4,
   "seats": {"A-01": [0, 0], "A-02": [1, 0], "B-01": [0, 1]},
-  "spaces": [{"c": 2, "r": 0, "w": 1, "h": 4, "label": "aisle"}]
+  "labels": [{"c": 2, "r": 0, "w": 1, "h": 4, "text": "aisle"}]
 }
 ```
 
 - `seats`: each key is a computer's id (the agent's `--id`, or its hostname by default);
   each value is `[column, row]`, counted from 0. Row 0 is the front of the room.
 - `rows` (optional): room depth, so empty back rows are kept. Up to 30 columns and 50 rows.
-- `spaces` (optional): empty blocks at column `c`, row `r`, `w` cells wide and `h` deep.
+- `labels` (optional): text blocks at column `c`, row `r`, `w` cells wide and `h` deep;
+  `text` is required (up to 40 characters).
 - Seats with no computer reporting show grey and dashed; computers that are not in the
   file are listed under "ไม่อยู่ในผัง" (not in the layout).
 - If the file is invalid (out of range, two blocks overlapping), the dashboard says so and

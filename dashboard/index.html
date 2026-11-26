@@ -200,8 +200,8 @@
       margin-bottom: 14px;
     }
     .room { display: grid; gap: 10px; grid-auto-rows: minmax(64px, auto); }
-    /* empty space (aisle, teacher's desk...): no computer, only an optional label */
-    .space {
+    /* label (aisle, teacher's desk...): no computer, only text, any size */
+    .tag {
       border-radius: 10px;
       display: flex;
       align-items: center;
@@ -290,11 +290,11 @@
     }
     .blk.seat-e { background: var(--panel); border: 2px solid var(--off-line); }
     .blk.seat-e b { font-size: 15px; }
-    .blk.space { border: 2px dashed var(--off-line); background-color: var(--panel); }
+    .blk.tag { border: 2px dashed var(--off-line); background-color: var(--panel); }
     .blk[aria-pressed="true"] { outline: 3px solid var(--accent); outline-offset: 2px; }
     .blk.dragging { z-index: 3; cursor: grabbing; box-shadow: 0 6px 18px rgba(0, 0, 0, .2); }
     .blk.bad { outline: 3px solid var(--crit); outline-offset: 2px; }
-    /* resize grip, bottom-right corner of an empty space */
+    /* resize grip, bottom-right corner of a label */
     .hdl {
       position: absolute;
       right: 0;
@@ -389,11 +389,11 @@
       edit: "แก้ไขผัง", create: "สร้างผังที่นั่ง",
       noMap: "ยังไม่มีผังที่นั่ง", noMapHint: "กด สร้างผังที่นั่ง แล้ววางเครื่องตามตำแหน่งจริงในห้อง",
       cols: "คอลัมน์", rows: "แถว", width: "กว้าง", height: "สูง", fewer: "ลด", more: "เพิ่ม",
-      addSpace: "เพิ่มที่ว่าง", save: "บันทึก", cancel: "ยกเลิก", download: "ดาวน์โหลดไฟล์",
-      edHint: "ลากบล็อกเพื่อย้าย ลากมุมขวาล่างของที่ว่างเพื่อปรับขนาด หรือกดเลือกบล็อกแล้วกดช่องที่ต้องการ · คีย์บอร์ด: ลูกศรย้าย, Shift+ลูกศรปรับขนาดที่ว่าง, Delete ลบ, Esc ยกเลิกการเลือก",
+      addLabel: "เพิ่มป้าย", save: "บันทึก", cancel: "ยกเลิก", download: "ดาวน์โหลดไฟล์",
+      edHint: "ลากบล็อกเพื่อย้าย ลากมุมขวาล่างของป้ายเพื่อปรับขนาด หรือกดเลือกบล็อกแล้วกดช่องที่ต้องการ · คีย์บอร์ด: ลูกศรย้าย, Shift+ลูกศรปรับขนาดป้าย, Delete ลบ, Esc ยกเลิกการเลือก",
       editArea: "ผังห้องที่กำลังแก้ไข",
-      seat: "ที่นั่ง", space: "ที่ว่าง", selTitle: "บล็อกที่เลือก", selNone: "กดบล็อกในผังเพื่อแก้ไข",
-      seatId: "รหัสเครื่อง", label: "ป้ายชื่อ (ไม่บังคับ)", labelPh: "เช่น ทางเดิน, โต๊ะครู", remove: "ลบออกจากผัง",
+      seat: "ที่นั่ง", label: "ป้าย", selTitle: "บล็อกที่เลือก", selNone: "กดบล็อกในผังเพื่อแก้ไข",
+      seatId: "รหัสเครื่อง", labelText: "ข้อความบนป้าย", labelPh: "เช่น ทางเดิน, โต๊ะครู", remove: "ลบออกจากผัง",
       unplaced: "เครื่องที่ยังไม่ได้วาง", unplacedNone: "เครื่องที่เชื่อมต่ออยู่ถูกวางในผังครบแล้ว",
       addById: "เพิ่มที่นั่งด้วยรหัสเครื่อง", add: "เพิ่ม",
       at: (c, r) => `คอลัมน์ ${c} แถว ${r}`, size: (w, h) => `${w} × ${h} ช่อง`,
@@ -403,7 +403,7 @@
       shrinkBlocked: "ย้ายหรือลบบล็อกในคอลัมน์หรือแถวสุดท้ายออกก่อน",
       noRoom: "ไม่มีช่องว่างเหลือ เพิ่มคอลัมน์หรือแถวก่อน",
       noFit: "วางตรงนั้นไม่ได้: ชนบล็อกอื่นหรือเกินขอบห้อง",
-      idTaken: "รหัสนี้อยู่ในผังแล้ว", idEmpty: "ต้องใส่รหัสเครื่อง", idLong: "รหัสเครื่องยาวเกิน 64 ตัวอักษร",
+      idTaken: "รหัสนี้อยู่ในผังแล้ว", textEmpty: "ใส่ข้อความบนป้าย หรือลบป้ายนี้ออก", idEmpty: "ต้องใส่รหัสเครื่อง", idLong: "รหัสเครื่องยาวเกิน 64 ตัวอักษร",
       discard: "ทิ้งการแก้ไขที่ยังไม่ได้บันทึก?",
     },
     en: {
@@ -428,11 +428,11 @@
       edit: "Edit map", create: "Create seat map",
       noMap: "No seat map yet", noMapHint: "Press Create seat map, then place each computer where it really is in the room",
       cols: "Columns", rows: "Rows", width: "Width", height: "Height", fewer: "Fewer", more: "More",
-      addSpace: "Add empty space", save: "Save", cancel: "Cancel", download: "Download file",
-      edHint: "Drag a block to move it. Drag the bottom-right corner of an empty space to resize it. Or select a block, then click the cell it should go to · Keyboard: arrows move, Shift+arrows resize an empty space, Delete removes, Esc deselects",
+      addLabel: "Add label", save: "Save", cancel: "Cancel", download: "Download file",
+      edHint: "Drag a block to move it. Drag the bottom-right corner of a label to resize it. Or select a block, then click the cell it should go to · Keyboard: arrows move, Shift+arrows resize a label, Delete removes, Esc deselects",
       editArea: "Room map being edited",
-      seat: "Seat", space: "Empty space", selTitle: "Selected block", selNone: "Click a block in the map to change it",
-      seatId: "Computer ID", label: "Label (optional)", labelPh: "e.g. aisle, teacher's desk", remove: "Remove from map",
+      seat: "Seat", label: "Label", selTitle: "Selected block", selNone: "Click a block in the map to change it",
+      seatId: "Computer ID", labelText: "Label text", labelPh: "e.g. aisle, teacher's desk", remove: "Remove from map",
       unplaced: "Computers not placed yet", unplacedNone: "Every connected computer is in the map",
       addById: "Add a seat by computer ID", add: "Add",
       at: (c, r) => `column ${c}, row ${r}`, size: (w, h) => `${w} × ${h} cells`,
@@ -442,7 +442,7 @@
       shrinkBlocked: "Move or remove the blocks in the last column or row first",
       noRoom: "No free cell left. Add a column or a row first",
       noFit: "Cannot go there: it overlaps another block or leaves the room",
-      idTaken: "That ID is already in the map", idEmpty: "Type a computer ID", idLong: "Computer IDs can be at most 64 characters",
+      idTaken: "That ID is already in the map", textEmpty: "Type the label text, or remove the label", idEmpty: "Type a computer ID", idLong: "Computer IDs can be at most 64 characters",
       discard: "Discard the changes you have not saved?",
     },
   };
@@ -542,8 +542,9 @@
   }
 
   // ---------- seat map ----------
-  // layout.json: {"cols":6, "rows":4, "seats":{"A-01":[0,0]}, "spaces":[{"c":2,"r":0,"w":1,"h":4,"label":"aisle"}]}
-  // seats are [column, row], row 0 = front. "rows" and "spaces" are optional. Blocks may not overlap.
+  // layout.json: {"cols":6, "rows":4, "seats":{"A-01":[0,0]}, "labels":[{"c":2,"r":0,"w":1,"h":4,"text":"aisle"}]}
+  // seats are [column, row], row 0 = front. "rows" and "labels" are optional; a label needs text.
+  // Blocks may not overlap.
   // The server checks the same rules when the editor saves (check_layout in server/core.cpp).
   const MAXC = 30, MAXR = 50;
   const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
@@ -555,7 +556,7 @@
     if (j.rows !== undefined && !isInt(j.rows, 1, MAXR)) return null;
     const maxR = j.rows || MAXR;
     if (!j.seats || typeof j.seats !== "object" || Array.isArray(j.seats)) return null;
-    const seats = [], spaces = [], all = [];
+    const seats = [], labels = [], all = [];
     for (const [id, p] of Object.entries(j.seats)) {
       if (!id || id.length > 64 || !Array.isArray(p) || p.length !== 2) return null;
       const [c, r] = p;
@@ -563,21 +564,21 @@
       seats.push({ id, c, r });
       all.push({ c, r, w: 1, h: 1 });
     }
-    if (j.spaces !== undefined) {
-      if (!Array.isArray(j.spaces)) return null;
-      for (const x of j.spaces) {
+    if (j.labels !== undefined) {
+      if (!Array.isArray(j.labels)) return null;
+      for (const x of j.labels) {
         if (!x || typeof x !== "object") return null;
         const { c, r, w, h } = x;
         if (!isInt(c, 0, cols - 1) || !isInt(r, 0, maxR - 1) || !isInt(w, 1, cols - c) || !isInt(h, 1, maxR - r)) return null;
-        if (x.label !== undefined && typeof x.label !== "string") return null;
-        spaces.push({ c, r, w, h, label: (x.label || "").slice(0, 40) });
+        if (typeof x.text !== "string" || !x.text.trim()) return null;
+        labels.push({ c, r, w, h, text: (x.text || "").slice(0, 40) });
         all.push({ c, r, w, h });
       }
     }
     for (let a = 0; a < all.length; a++)
       for (let b = a + 1; b < all.length; b++) if (overlaps(all[a], all[b])) return null;
     const need = Math.max(1, ...all.map(b => b.r + b.h));
-    return { cols, rows: Math.max(j.rows || 0, need), seats, spaces };
+    return { cols, rows: Math.max(j.rows || 0, need), seats, labels };
   }
   function loadLayout() {
     fetch("/layout.json", { cache: "no-store" })
@@ -602,8 +603,8 @@
     const T = t();
     const byId = new Map(ms.map(m => [m.id, m]));
     const inLayout = new Set(layout.seats.map(s => s.id));
-    const spaces = layout.spaces.map(x =>
-      `<div class="space" style="grid-column:${x.c + 1}/span ${x.w};grid-row:${x.r + 1}/span ${x.h}"${x.label ? "" : ' aria-hidden="true"'}>${esc(x.label)}</div>`).join("");
+    const labels = layout.labels.map(x =>
+      `<div class="tag" style="grid-column:${x.c + 1}/span ${x.w};grid-row:${x.r + 1}/span ${x.h}"${x.text ? "" : ' aria-hidden="true"'}>${esc(x.text)}</div>`).join("");
     const tiles = layout.seats.map(s => {
       const m = byId.get(s.id);
       const st = m && STATES.includes(m.status) ? m.status : "none";
@@ -620,21 +621,21 @@
           `<li class="${esc(m.status)}"><span class="dot"></span>${esc(m.id)}: ${esc(T[m.status] || m.status)}</li>`).join("")}</ul></div>`
       : "";
     return `<div id="mapwrap" tabindex="0" role="region" aria-label="${esc(T.mapLabel)}"><div class="front">${esc(T.front)}</div>
-      <div class="room" style="grid-template-columns:repeat(${layout.cols},minmax(84px,1fr));grid-template-rows:repeat(${layout.rows},minmax(64px,auto))">${spaces}${tiles}</div></div>${outside}`;
+      <div class="room" style="grid-template-columns:repeat(${layout.cols},minmax(84px,1fr));grid-template-rows:repeat(${layout.rows},minmax(64px,auto))">${labels}${tiles}</div></div>${outside}`;
   }
 
   // ---------- seat map editor ----------
   // Works on a copy of the layout; nothing changes on the server until Save.
-  // Blocks are seats (1 x 1, one computer) and empty spaces (w x h, optional label).
-  let ed = null;     // {cols, rows, seats, spaces, sel, dirty, msg, msgBad, msgExtra, lang, trayKey}
+  // Blocks are seats (1 x 1, one computer) and labels (w x h, text such as "aisle").
+  let ed = null;     // {cols, rows, seats, labels, sel, dirty, msg, msgBad, msgExtra, lang, trayKey}
   let drag = null;   // pointer drag in progress
   function edStart() {
-    const L = layout || { cols: 6, rows: 5, seats: [], spaces: [] };
-    ed = { cols: L.cols, rows: L.rows, seats: L.seats.map(x => ({ ...x })), spaces: L.spaces.map(x => ({ ...x })),
+    const L = layout || { cols: 6, rows: 5, seats: [], labels: [] };
+    ed = { cols: L.cols, rows: L.rows, seats: L.seats.map(x => ({ ...x })), labels: L.labels.map(x => ({ ...x })),
            sel: null, dirty: false, msg: "", msgBad: false, msgExtra: "", lang: null, trayKey: "" };
     mapMsg = null;
     render();
-    $("ed-addsp").focus();
+    $("ed-addlb").focus();
   }
   function edStop() {
     if (ed && ed.dirty && !confirm(t().discard)) return;
@@ -642,10 +643,10 @@
     render();
     $("edopen").focus();
   }
-  const edItem = (k, i) => k === "seat" ? ed.seats[i] : ed.spaces[i];
+  const edItem = (k, i) => k === "seat" ? ed.seats[i] : ed.labels[i];
   const edBlocks = () => [
     ...ed.seats.map((x, i) => ({ k: "seat", i, c: x.c, r: x.r, w: 1, h: 1 })),
-    ...ed.spaces.map((x, i) => ({ k: "space", i, c: x.c, r: x.r, w: x.w, h: x.h })),
+    ...ed.labels.map((x, i) => ({ k: "label", i, c: x.c, r: x.r, w: x.w, h: x.h })),
   ];
   // true when block (k, i) may sit at c, r with size w x h
   function edFits(k, i, c, r, w, h) {
@@ -669,7 +670,7 @@
     const T = t();
     return k === "seat"
       ? `${T.seat} ${x.id}, ${T.at(x.c + 1, x.r + 1)}`
-      : `${T.space}${x.label ? " " + x.label : ""}, ${T.at(x.c + 1, x.r + 1)}, ${T.size(x.w, x.h)}`;
+      : `${T.label}${x.text ? " " + x.text : ""}, ${T.at(x.c + 1, x.r + 1)}, ${T.size(x.w, x.h)}`;
   }
   function edFocusSel() {
     if (!ed || !ed.sel) return;
@@ -692,7 +693,7 @@
       <div class="edbar" id="ed-bar">
         ${stepper("ed-c", T.cols, ed.cols)}
         ${stepper("ed-r", T.rows, ed.rows)}
-        <button type="button" class="btn" id="ed-addsp">+ ${esc(T.addSpace)}</button>
+        <button type="button" class="btn" id="ed-addlb">+ ${esc(T.addLabel)}</button>
         <span class="grow"></span>
         <div class="acts">
           <button type="button" class="btn" id="ed-dl">${esc(T.download)}</button>
@@ -723,7 +724,7 @@
       else if (b.id === "ed-c+") edResizeRoom(1, 0);
       else if (b.id === "ed-r-") edResizeRoom(0, -1);
       else if (b.id === "ed-r+") edResizeRoom(0, 1);
-      else if (b.id === "ed-addsp") edAddSpace();
+      else if (b.id === "ed-addlb") edAddLabel();
       else if (b.id === "ed-dl") edDownload();
       else if (b.id === "ed-cancel") edStop();
       else if (b.id === "ed-save") edSave();
@@ -755,10 +756,10 @@
       for (let c = 0; c < ed.cols; c++)
         h += `<div class="cell" data-c="${c}" data-r="${r}" style="grid-column:${c + 1};grid-row:${r + 1}"></div>`;
     const on = (k, i) => !!ed.sel && ed.sel.k === k && ed.sel.i === i;
-    ed.spaces.forEach((x, i) => {
-      h += `<div class="blk space" data-k="space" data-i="${i}" tabindex="0" role="button" aria-pressed="${on("space", i)}"
-        aria-label="${esc(edLabel("space", x))}" style="grid-column:${x.c + 1}/span ${x.w};grid-row:${x.r + 1}/span ${x.h}">
-        <span class="lbl">${esc(x.label)}</span><span class="hdl" aria-hidden="true"></span></div>`;
+    ed.labels.forEach((x, i) => {
+      h += `<div class="blk tag" data-k="label" data-i="${i}" tabindex="0" role="button" aria-pressed="${on("label", i)}"
+        aria-label="${esc(edLabel("label", x))}" style="grid-column:${x.c + 1}/span ${x.w};grid-row:${x.r + 1}/span ${x.h}">
+        <span class="txt">${esc(x.text)}</span><span class="hdl" aria-hidden="true"></span></div>`;
     });
     ed.seats.forEach((x, i) => {
       h += `<div class="blk seat-e" data-k="seat" data-i="${i}" tabindex="0" role="button" aria-pressed="${on("seat", i)}"
@@ -787,9 +788,9 @@
         <input type="text" id="ed-id" maxlength="64" value="${esc(x.id)}" autocomplete="off" spellcheck="false">
         <button type="button" class="btn danger" id="ed-rm">${esc(T.remove)}</button>`;
     } else {
-      box.innerHTML = `<h2>${esc(T.space)}</h2><p class="small">${esc(T.at(x.c + 1, x.r + 1))}</p>
-        <label for="ed-lbl">${esc(T.label)}</label>
-        <input type="text" id="ed-lbl" maxlength="40" value="${esc(x.label)}" placeholder="${esc(T.labelPh)}" autocomplete="off">
+      box.innerHTML = `<h2>${esc(T.label)}</h2><p class="small">${esc(T.at(x.c + 1, x.r + 1))}</p>
+        <label for="ed-lbl">${esc(T.labelText)}</label>
+        <input type="text" id="ed-lbl" maxlength="40" value="${esc(x.text)}" placeholder="${esc(T.labelPh)}" autocomplete="off">
         ${stepper("ed-w", T.width, x.w)}${stepper("ed-h", T.height, x.h)}
         <div><button type="button" class="btn danger" id="ed-rm">${esc(T.remove)}</button></div>`;
     }
@@ -801,16 +802,16 @@
       const { k, i } = ed.sel, x = edItem(k, i);
       if (b.id === "ed-rm") return edRemove(k, i);
       const d = { "ed-w-": [-1, 0], "ed-w+": [1, 0], "ed-h-": [0, -1], "ed-h+": [0, 1] }[b.id];
-      if (d && k === "space") edSet(k, i, x.c, x.r, x.w + d[0], x.h + d[1]);
+      if (d && k === "label") edSet(k, i, x.c, x.r, x.w + d[0], x.h + d[1]);
     });
     box.addEventListener("input", e => {
       if (e.target.id !== "ed-lbl" || !ed.sel) return;
-      const x = edItem("space", ed.sel.i);
-      x.label = e.target.value.slice(0, 40);
+      const x = edItem("label", ed.sel.i);
+      x.text = e.target.value.slice(0, 40);
       ed.dirty = true;
       // update the block in place: a full redraw would move the text cursor
-      const el = $("ed-grid").querySelector(`.blk[data-k="space"][data-i="${ed.sel.i}"]`);
-      if (el) { el.querySelector(".lbl").textContent = x.label; el.setAttribute("aria-label", edLabel("space", x)); }
+      const el = $("ed-grid").querySelector(`.blk[data-k="label"][data-i="${ed.sel.i}"]`);
+      if (el) { el.querySelector(".txt").textContent = x.text; el.setAttribute("aria-label", edLabel("label", x)); }
     });
     box.addEventListener("change", e => {
       if (e.target.id !== "ed-id" || !ed.sel) return;
@@ -841,7 +842,7 @@
     if (!edFits(k, i, c, r, w, h)) { edSay("noFit", true); return false; }
     const x = edItem(k, i);
     x.c = c; x.r = r;
-    if (k === "space") { x.w = w; x.h = h; }
+    if (k === "label") { x.w = w; x.h = h; }
     ed.sel = { k, i }; ed.dirty = true;
     edSay("");
     edDraw();
@@ -873,21 +874,21 @@
     if (!fromForm) edFocusSel();
     return true;
   }
-  function edAddSpace() {
+  function edAddLabel() {
     const at = edFree();
     if (!at) { edSay("noRoom", true); return; }
-    ed.spaces.push({ c: at.c, r: at.r, w: 1, h: 1, label: "" });
-    ed.sel = { k: "space", i: ed.spaces.length - 1 }; ed.dirty = true;
+    ed.labels.push({ c: at.c, r: at.r, w: 1, h: 1, text: "" });
+    ed.sel = { k: "label", i: ed.labels.length - 1 }; ed.dirty = true;
     edSay("");
     edDraw();
-    edFocusSel();
+    $("ed-lbl").focus();      // a label is its text: type it straight away
   }
   function edRemove(k, i) {
-    (k === "seat" ? ed.seats : ed.spaces).splice(i, 1);
+    (k === "seat" ? ed.seats : ed.labels).splice(i, 1);
     ed.sel = null; ed.dirty = true;
     edSay("removed");
     edDraw();
-    $("ed-addsp").focus();
+    $("ed-addlb").focus();
   }
 
   // ---- pointer: drag to move, drag the corner grip to resize, tap a block then tap a cell ----
@@ -948,13 +949,13 @@
       const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
       if (d) {
         e.preventDefault();
-        const ok = e.shiftKey && k === "space"
+        const ok = e.shiftKey && k === "label"
           ? edSet(k, i, x.c, x.r, x.w + d[0], x.h + d[1])
           : edSet(k, i, x.c + d[0], x.r + d[1], x.w || 1, x.h || 1);
         if (ok) edFocusSel();
       } else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); edSelect(k, i); }
       else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); edRemove(k, i); }
-      else if (e.key === "Escape") { e.preventDefault(); ed.sel = null; edDraw(); el.blur(); $("ed-addsp").focus(); }
+      else if (e.key === "Escape") { e.preventDefault(); ed.sel = null; edDraw(); el.blur(); $("ed-addlb").focus(); }
     });
   }
 
@@ -962,20 +963,31 @@
   function edOut() {
     const o = { cols: ed.cols, rows: ed.rows, seats: {} };
     for (const x of [...ed.seats].sort((a, b) => a.r - b.r || a.c - b.c)) o.seats[x.id] = [x.c, x.r];
-    if (ed.spaces.length)
-      o.spaces = ed.spaces.map(x => x.label ? { c: x.c, r: x.r, w: x.w, h: x.h, label: x.label } : { c: x.c, r: x.r, w: x.w, h: x.h });
+    if (ed.labels.length)
+      o.labels = ed.labels.map(x => ({ c: x.c, r: x.r, w: x.w, h: x.h, text: x.text.trim() }));
     return o;
   }
-  // one seat or space per line, like the server writes it
+  // one seat or label per line, like the server writes it
   function fmtLayout(o) {
     const q = JSON.stringify, seats = Object.entries(o.seats);
     let s = `{\n  "cols": ${o.cols},\n  "rows": ${o.rows},\n  "seats": {`;
     s += seats.length ? seats.map(([id, p]) => `\n    ${q(id)}: [${p[0]}, ${p[1]}]`).join(",") + "\n  }" : "}";
-    if (o.spaces) s += `,\n  "spaces": [` + o.spaces.map(x =>
-      `\n    {"c": ${x.c}, "r": ${x.r}, "w": ${x.w}, "h": ${x.h}${x.label ? `, "label": ${q(x.label)}` : ""}}`).join(",") + "\n  ]";
+    if (o.labels) s += `,\n  "labels": [` + o.labels.map(x =>
+      `\n    {"c": ${x.c}, "r": ${x.r}, "w": ${x.w}, "h": ${x.h}${x.text ? `, "text": ${q(x.text)}` : ""}}`).join(",") + "\n  ]";
     return s + "\n}\n";
   }
+  // false (and points at it) when a label has no text yet
+  function edReady() {
+    const i = ed.labels.findIndex(x => !x.text.trim());
+    if (i < 0) return true;
+    ed.sel = { k: "label", i };
+    edDraw();
+    edSay("textEmpty", true);
+    $("ed-lbl").focus();
+    return false;
+  }
   function edDownload() {
+    if (!edReady()) return;
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([fmtLayout(edOut())], { type: "application/json" }));
     a.download = "layout.json";
@@ -985,6 +997,7 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
   async function edSave() {
+    if (!edReady()) return;
     const out = edOut();
     edSay("saving");
     let r, j = null;

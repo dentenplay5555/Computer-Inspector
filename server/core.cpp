@@ -38,7 +38,7 @@ static bool url_dec(const std::string&in,std::string&out) {
 }
 // Seat map file. Same rules as checkLayout() in dashboard/index.html:
 // {"cols":1..30, "rows":1..50 (optional), "seats":{"<id>":[col,row]},
-//  "spaces":[{"c","r","w","h","label"}] (optional)}; no two blocks may overlap.
+//  "labels":[{"c","r","w","h","text"}] (optional, text required)}; no two blocks may overlap.
 static bool check_layout(const json&j,std::string&why) {
   auto is_int=[](const json&v,long lo,long hi){return v.is_number_integer()&&v.get<long>()>=lo&&v.get<long>()<=hi;};
   if (!j.is_object()) {why="not an object"; return false;}
@@ -56,14 +56,15 @@ static bool check_layout(const json&j,std::string&why) {
     if (!p.is_array()||p.size()!=2||!is_int(p[0],0,cols-1)||!is_int(p[1],0,rows-1)) {why="bad seat "+id; return false;}
     bs.push_back({p[0].get<long>(),p[1].get<long>(),1,1});
   }
-  if (j.contains("spaces")) {
-    if (!j["spaces"].is_array()||j["spaces"].size()>1500) {why="spaces must be a list"; return false;}
-    for (auto&sp:j["spaces"]) {
-      if (!sp.is_object()||!sp.contains("c")||!sp.contains("r")||!sp.contains("w")||!sp.contains("h")) {why="bad space"; return false;}
-      if (!is_int(sp["c"],0,cols-1)||!is_int(sp["r"],0,rows-1)||!is_int(sp["w"],1,cols)||!is_int(sp["h"],1,rows)) {why="bad space"; return false;}
-      box b{sp["c"].get<long>(),sp["r"].get<long>(),sp["w"].get<long>(),sp["h"].get<long>()};
-      if (b.c+b.w>cols||b.r+b.h>rows) {why="space outside the room"; return false;}
-      if (sp.contains("label")&&(!sp["label"].is_string()||sp["label"].get<std::string>().size()>160)) {why="bad space label"; return false;}
+  if (j.contains("labels")) {
+    if (!j["labels"].is_array()||j["labels"].size()>1500) {why="labels must be a list"; return false;}
+    for (auto&lb:j["labels"]) {
+      if (!lb.is_object()||!lb.contains("c")||!lb.contains("r")||!lb.contains("w")||!lb.contains("h")) {why="bad label"; return false;}
+      if (!is_int(lb["c"],0,cols-1)||!is_int(lb["r"],0,rows-1)||!is_int(lb["w"],1,cols)||!is_int(lb["h"],1,rows)) {why="bad label"; return false;}
+      box b{lb["c"].get<long>(),lb["r"].get<long>(),lb["w"].get<long>(),lb["h"].get<long>()};
+      if (b.c+b.w>cols||b.r+b.h>rows) {why="label outside the room"; return false;}
+      if (!lb.contains("text")||!lb["text"].is_string()||lb["text"].get<std::string>().find_first_not_of(" \t")==std::string::npos
+          ||lb["text"].get<std::string>().size()>160) {why="label needs text (up to 40 characters)"; return false;}
       bs.push_back(b);
     }
   }
@@ -71,7 +72,7 @@ static bool check_layout(const json&j,std::string&why) {
     if (bs[a].c<bs[b].c+bs[b].w&&bs[b].c<bs[a].c+bs[a].w&&bs[a].r<bs[b].r+bs[b].h&&bs[b].r<bs[a].r+bs[a].h) {why="two blocks overlap"; return false;}
   return true;
 }
-// One seat or space per line, so the file stays easy to edit by hand.
+// One seat or label per line, so the file stays easy to edit by hand.
 static std::string fmt_layout(const json&j) {
   auto d=[](const json&v){return v.dump(-1,' ',false,json::error_handler_t::replace);};
   std::string o="{\n  \"cols\": "+d(j["cols"]);
@@ -83,13 +84,11 @@ static std::string fmt_layout(const json&j) {
     first=false;
   }
   o+=first?"}":"\n  }";
-  if (j.contains("spaces")&&!j["spaces"].empty()) {
-    o+=",\n  \"spaces\": [";
+  if (j.contains("labels")&&!j["labels"].empty()) {
+    o+=",\n  \"labels\": [";
     first=true;
-    for (auto&sp:j["spaces"]) {
-      o+=std::string(first?"":",")+"\n    {\"c\": "+d(sp["c"])+", \"r\": "+d(sp["r"])+", \"w\": "+d(sp["w"])+", \"h\": "+d(sp["h"]);
-      if (sp.contains("label")&&!sp["label"].get<std::string>().empty()) o+=", \"label\": "+d(sp["label"]);
-      o+="}";
+    for (auto&lb:j["labels"]) {
+      o+=std::string(first?"":",")+"\n    {\"c\": "+d(lb["c"])+", \"r\": "+d(lb["r"])+", \"w\": "+d(lb["w"])+", \"h\": "+d(lb["h"])+", \"text\": "+d(lb["text"])+"}";
       first=false;
     }
     o+="\n  ]";
