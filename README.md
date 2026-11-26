@@ -143,7 +143,7 @@ On the server computer, every card has an edit button (pencil) that opens:
 - **Description:** a note under the name, such as "screen flickers".
 - **Remove from dashboard:** for an online or offline computer. It disappears from the
   dashboards and the server window, and the server ignores its data, until you press
-  **Add back** (in the notice shown after removing, or under **Removed computers** at the
+  **Add back** (in the notice shown after removing, or under **Show removed computers** at the
   bottom of the page). Its history and baseline are kept.
 
 Names, descriptions and removed computers are saved in `machines.json` next to the server

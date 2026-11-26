@@ -334,7 +334,27 @@
     .desc { margin: -6px 0 14px; font-size: 14px; color: var(--text); overflow-wrap: anywhere; white-space: pre-line; }
     .notice .nacts { display: flex; flex-wrap: wrap; gap: 8px; flex: none; }
     /* computers removed on the dashboard */
-    #removed { margin-top: 18px; }
+    #removed { margin-top: 14px; }
+    /* "Show removed computers": reads as text, still a 44 px target */
+    .linkbtn {
+      min-height: 44px;
+      padding: 0 4px;
+      border: 0;
+      background: none;
+      color: var(--accent);
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .linkbtn:hover { color: var(--text); }
+    .linkbtn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
+    .linkbtn[aria-expanded="true"] svg { transform: rotate(180deg); }
+    #removed .panel { margin-top: 6px; }
     #removed ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
     #removed li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
     #removed li .meta { margin-right: auto; }
@@ -452,7 +472,7 @@
     </div>
     <div id="grid"></div>
     <div id="map" hidden></div>
-    <section class="panel" id="removed" hidden></section>
+    <section id="removed" hidden></section>
     <div id="ed" hidden></div>
     <dialog class="ask" id="mdlg" aria-labelledby="mq">
       <form id="mform" novalidate>
@@ -498,11 +518,11 @@
       down: "รับ", up: "ส่ง", noData: d => `ไม่ได้รับข้อมูลมา ${d}`,
       unit: { s: "วินาที", m: "นาที", h: "ชั่วโมง", d: () => "วัน" },
       removeBtn: "เอาออกจากแดชบอร์ด", rmTitle: id => `เอา ${id} ออกจากแดชบอร์ด?`,
-      rmBody: "เครื่องนี้จะถูกซ่อน และเซิร์ฟเวอร์จะไม่รับข้อมูลจากเครื่องนี้จนกว่าจะกด เพิ่มกลับ ในรายการ เครื่องที่เอาออก ด้านล่างของหน้านี้ ประวัติของเครื่องยังเก็บไว้",
+      rmBody: "เครื่องนี้จะถูกซ่อน และเซิร์ฟเวอร์จะไม่รับข้อมูลจากเครื่องนี้จนกว่าจะกด เพิ่มกลับ ใน แสดงเครื่องที่เอาออก ด้านล่างของหน้านี้ ประวัติของเครื่องยังเก็บไว้",
       rmYes: "เอาออก", rmNo: "ยกเลิก",
-      rmDone: id => `เอา ${id} ออกแล้ว เพิ่มกลับได้ด้วยปุ่ม เพิ่มกลับ ตรงนี้ หรือในรายการ เครื่องที่เอาออก ด้านล่างของหน้า`,
+      rmDone: id => `เอา ${id} ออกแล้ว เพิ่มกลับได้ด้วยปุ่ม เพิ่มกลับ ตรงนี้ หรือใน แสดงเครื่องที่เอาออก ด้านล่างของหน้า`,
       rmFail: id => `เอา ${id} ออกไม่สำเร็จ`, close: "ปิด",
-      removedTitle: n => `เครื่องที่เอาออก (${n})`, removedHint: "เซิร์ฟเวอร์ไม่รับข้อมูลจากเครื่องเหล่านี้จนกว่าจะเพิ่มกลับ",
+      showRemoved: n => `แสดงเครื่องที่เอาออก (${n})`, hideRemoved: n => `ซ่อนเครื่องที่เอาออก (${n})`, removedHint: "เซิร์ฟเวอร์ไม่รับข้อมูลจากเครื่องเหล่านี้จนกว่าจะเพิ่มกลับ",
       addBack: "เพิ่มกลับ", backDone: id => `เพิ่ม ${id} กลับแล้ว จะแสดงอีกครั้งเมื่อ agent ของเครื่องส่งข้อมูล`,
       backFail: id => `เพิ่ม ${id} กลับไม่สำเร็จ`, localOnly: id => `ทำได้เฉพาะบนเครื่องที่รัน server`,
       editBtn: id => `แก้ไข ${id}`, mName: "ชื่อที่แสดง", mNameHint: "เว้นว่างไว้เพื่อแสดงรหัสเครื่อง",
@@ -549,11 +569,11 @@
       down: "Down", up: "Up", noData: d => `No data for ${d}`,
       unit: { s: "s", m: "min", h: "h", d: n => n === 1 ? "day" : "days" },
       removeBtn: "Remove from dashboard", rmTitle: id => `Remove ${id} from the dashboard?`,
-      rmBody: "It is hidden, and the server ignores its data, until you press Add back under Removed computers at the bottom of this page. Its history is kept.",
+      rmBody: "It is hidden, and the server ignores its data, until you press Add back under Show removed computers at the bottom of this page. Its history is kept.",
       rmYes: "Remove", rmNo: "Cancel",
-      rmDone: id => `${id} was removed. To add it back, press Add back here, or under Removed computers at the bottom of the page.`,
+      rmDone: id => `${id} was removed. To add it back, press Add back here, or under Show removed computers at the bottom of the page.`,
       rmFail: id => `Could not remove ${id}`, close: "Close",
-      removedTitle: n => `Removed computers (${n})`, removedHint: "The server ignores these computers' data until you add them back.",
+      showRemoved: n => `Show removed computers (${n})`, hideRemoved: n => `Hide removed computers (${n})`, removedHint: "The server ignores these computers' data until you add them back.",
       addBack: "Add back", backDone: id => `${id} was added back. It shows again when its agent sends data.`,
       backFail: id => `Could not add ${id} back`, localOnly: id => `Only possible on the server computer`,
       editBtn: id => `Edit ${id}`, mName: "Display name", mNameHint: "Leave empty to show the computer ID",
@@ -1288,12 +1308,15 @@
     render();
     $("noticex").focus();
   }
+  let showRemoved = false;      // the removed list stays folded until asked for
   function removedHTML() {
     const T = t(), list = lastDt && Array.isArray(lastDt.removed) ? lastDt.removed : [];
     if (!list.length) return "";
-    return `<h2>${esc(T.removedTitle(list.length))}</h2><p class="small">${esc(T.removedHint)}</p><ul>${list.map(x =>
+    const btn = `<button type="button" class="linkbtn" data-key="toggle-removed" aria-expanded="${showRemoved}">${esc((showRemoved ? T.hideRemoved : T.showRemoved)(list.length))}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`;
+    if (!showRemoved) return btn;
+    return btn + `<div class="panel"><p class="small">${esc(T.removedHint)}</p><ul>${list.map(x =>
       `<li><b>${esc(x.name || x.id)}</b><span class="meta">${x.name ? esc(x.id) : ""}</span>${can
-        ? `<button type="button" class="btn" data-key="back:${esc(x.id)}">${esc(T.addBack)}</button>` : ""}</li>`).join("")}</ul>`;
+        ? `<button type="button" class="btn" data-key="back:${esc(x.id)}">${esc(T.addBack)}</button>` : ""}</li>`).join("")}</ul></div>`;
   }
 
   // Cards are redrawn every second. Skip a redraw that changes nothing, never redraw under a
@@ -1397,6 +1420,7 @@
     if (b) openEdit(b.dataset.key.slice(5));
   });
   $("removed").addEventListener("click", e => {
+    if (e.target.closest("button[data-key='toggle-removed']")) { showRemoved = !showRemoved; render(); return; }
     const b = e.target.closest("button[data-key^='back:']");
     if (b) restoreMachine(b.dataset.key.slice(5));
   });
