@@ -1,0 +1,36 @@
+{
+  "settings": {
+    "host": "127.0.0.1",
+    "port": 8080,
+    "jump_at": 120,
+    "after": 20,
+    "seed": 12,
+    "out": "docs/baseline-restart-test-2026-11-26.json"
+  },
+  "samples_sent": 420,
+  "learning_ended_s": {
+    "JUMP-C": 0.9,
+    "NORM-A": 0.9,
+    "NORM-B": 0.9
+  },
+  "false_alerts": {
+    "NORM-A": 0,
+    "NORM-B": 0,
+    "JUMP-C_before_jump": 0
+  },
+  "jump_at_s": 120,
+  "jump_detected_at_s": 124.4,
+  "detection_delay_s": 4.4,
+  "events": {
+    "NORM-A": [],
+    "NORM-B": [],
+    "JUMP-C": [
+      [
+        124.4,
+        [
+          "rx"
+        ]
+      ]
+    ]
+  }
+}

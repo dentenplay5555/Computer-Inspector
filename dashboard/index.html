@@ -2,115 +2,537 @@
 <html lang="th">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Computer Inspector</title>
   <style>
-    body { 
-      font-family: system-ui, sans-serif; 
-      background: #f4f5f7; margin: 16px; 
+    /* Direction: DESIGN.md (friendly classroom tool, neutral greys + one teal accent,
+       light/dark, Noto Sans Thai, Thai/English). Status colors only mark machine state.
+       All color pairs below are checked for WCAG AA. */
+    :root {
+      --bg: #f5f6f6; --panel: #ffffff; --text: #1d2527; --muted: #56625f; --line: #d7dcdd;
+      --accent: #0f766e; --on-accent: #ffffff; --accent-soft: #e7f3f1;
+      --track: #e3e7e8; --fill: #7a8689; --spark: #56625f;
+      --ok: #137535; --warn: #a84d06; --crit: #b91c1c; --off: #56625f;
+      --ok-bg: #e6f3eb; --warn-bg: #fbeedd; --crit-bg: #fbe4e2; --off-bg: #eceeee;
+      --warn-line: #a86f00; --off-line: #7a828c;
+      color-scheme: light;
     }
-    #grid { 
-      display: grid; 
-      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); 
-      gap: 12px; 
+    :root[data-theme="dark"] {
+      --bg: #111617; --panel: #192022; --text: #e5ecec; --muted: #9aa8aa; --line: #2b3537;
+      --accent: #2dd4bf; --on-accent: #062b27; --accent-soft: #12302d;
+      --track: #2a3436; --fill: #8a989b; --spark: #9aa8aa;
+      --ok: #4ade80; --warn: #fbbf24; --crit: #f87171; --off: #9aa8aa;
+      --ok-bg: #13281c; --warn-bg: #2e2410; --crit-bg: #321a1a; --off-bg: #1e2729;
+      --warn-line: #fbbf24; --off-line: #6b787b;
+      color-scheme: dark;
     }
-    .card { 
-      background: #fff; 
-      border-radius: 10px; 
-      padding: 12px 14px;
-      border-left: 6px solid gray; 
+    [hidden] { display: none !important; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Noto Sans Thai", "Noto Sans", "Sarabun", "Leelawadee UI", "Thonburi", system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
     }
-    .card.ok { 
-      border-left-color: #1f9d55; 
+    button { font: inherit; }
+    :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+    /* ---------- header ---------- */
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px 20px;
+      padding: 16px 24px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
     }
-    .card.warn { 
-      border-left-color: #d98e04; 
+    .brand { margin-right: auto; }
+    .brand h1 { margin: 0; font-size: 22px; line-height: 1.2; }
+    .brand p { margin: 0; color: var(--muted); font-size: 14px; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; }
+    .btn {
+      min-height: 44px;
+      padding: 0 16px;
+      border: 1px solid var(--off-line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 15px;
     }
-    .card.crit { 
-      border-left-color: #d6342c; 
+    .btn:hover { border-color: var(--text); }
+    /* icon buttons: hand-drawn inline SVG (no web font, the lab may be offline); the
+       accessible name comes from aria-label, the tooltip from title */
+    .btn.ico { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; }
+    .btn.sq { width: 44px; padding: 0; }
+    .btn svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .btn .code { font-size: 14px; font-weight: 700; letter-spacing: .02em; }
+    .seg { display: inline-flex; border: 1px solid var(--off-line); border-radius: 8px; overflow: hidden; }
+    .seg .btn { border: 0; border-radius: 0; }
+    .seg .btn + .btn { border-left: 1px solid var(--off-line); }
+    .seg .btn[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+
+    main { padding: 20px 24px 40px; max-width: 1600px; margin: 0 auto; }
+
+    /* ---------- status strip: the focal point ---------- */
+    .strip {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 28px;
+      padding: 16px 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      margin-bottom: 16px;
     }
-    .card.offline {
-      opacity: .5; 
+    .conn { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--muted); margin-right: auto; }
+    .count { display: flex; align-items: baseline; gap: 8px; }
+    .count b { font-size: 28px; line-height: 1; font-variant-numeric: tabular-nums; }
+    .count span { font-size: 15px; }
+    .count.zero b, .count.zero span { color: var(--muted); }
+    .count.ok b, .count.ok span { color: var(--ok); }
+    .count.warn b, .count.warn span { color: var(--warn); }
+    .count.crit b, .count.crit span { color: var(--crit); }
+    .count.offline b, .count.offline span { color: var(--off); }
+
+    /* identity motif: a status is always a dot plus a word, never color alone */
+    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; background: var(--off); }
+    .ok .dot, .dot.ok { background: var(--ok); }
+    .warn .dot, .dot.warn { background: var(--warn); }
+    .crit .dot, .dot.crit { background: var(--crit); }
+    .dot.live { background: var(--ok); }
+    .dot.wait { background: var(--muted); }
+    .dot.lost { background: var(--crit); }
+
+    .banner {
+      padding: 12px 16px;
+      border-radius: 10px;
+      margin-bottom: 16px;
+      background: var(--crit-bg);
+      color: var(--crit);
+      font-weight: 600;
     }
-    .top {
-      display: flex; 
-      justify-content: space-between; 
-      margin-bottom: 8px; }
-    .name { 
-      font-weight: 600; 
+    .note { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+
+    /* ---------- cards ---------- */
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 14px;
     }
-    .sub { 
-      font-size: 12px; 
-      color: #666; 
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
     }
-    .row { 
-      display: grid; 
-     grid-template-columns: 42px 1fr 48px; 
-      gap: 8px;
-      align-items: center; 
-      font-size: 12px; 
-      margin: 5px 0; 
+    /* only cards that need the teacher get a colored outline */
+    .card.warn { border: 2px solid var(--warn-line); }
+    .card.crit { border: 2px solid var(--crit); }
+    .card.offline { background: var(--off-bg); }
+    .card.offline .metrics { opacity: .55; }
+    .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
+    .name { font-weight: 700; font-size: 18px; line-height: 1.25; overflow-wrap: anywhere; }
+    .meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+    .state { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+    .state.ok { color: var(--ok); } .state.warn { color: var(--warn); }
+    .state.crit { color: var(--crit); } .state.offline { color: var(--off); }
+    .row {
+      display: grid;
+      grid-template-columns: 46px 1fr 44px;
+      gap: 10px;
+      align-items: center;
+      font-size: 14px;
+      margin: 6px 0;
     }
-    .bar { 
-      height: 7px; background: #e3e6ec; 
-      border-radius: 4px; 
-      overflow: hidden; 
+    .row .v { text-align: right; font-variant-numeric: tabular-nums; }
+    .row.hot .v { color: var(--warn); font-weight: 700; }
+    .row.hotter .v { color: var(--crit); font-weight: 700; }
+    .bar { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; }
+    .bar i { display: block; height: 100%; background: var(--fill); border-radius: 4px; }
+    .row.hot .bar i { background: var(--warn); }
+    .row.hotter .bar i { background: var(--crit); }
+    .net { display: flex; gap: 16px; color: var(--muted); font-size: 14px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+    .hist { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 10px; }
+    .abn { color: var(--crit); font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+    .small { color: var(--muted); font-size: 13px; }
+    .spark { display: grid; grid-template-columns: 46px 1fr 56px; gap: 10px; align-items: center; font-size: 13px; margin: 2px 0; }
+    .spark svg { width: 100%; height: 24px; display: block; }
+    .spark .v { text-align: right; font-variant-numeric: tabular-nums; }
+    .spark polyline { fill: none; stroke: var(--spark); stroke-width: 1.5; }
+    .spark line { stroke: var(--off-line); stroke-width: 1; stroke-dasharray: 3 3; }
+    .spark.hot { color: var(--crit); font-weight: 700; }
+    .spark.hot polyline { stroke: var(--crit); }
+
+    .empty {
+      background: var(--panel);
+      border: 1px dashed var(--off-line);
+      border-radius: 12px;
+      padding: 40px 24px;
+      text-align: center;
     }
-    .bar i { 
-      display: block; 
-      height: 100%; 
-      background: #2f6fed; 
+    .empty h2 { margin: 0 0 6px; font-size: 20px; }
+    .empty p { margin: 0 0 10px; color: var(--muted); }
+    .empty code {
+      display: inline-block;
+      background: var(--accent-soft);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 15px;
+      /* a command to type: monospace so "--host" cannot look like a dash */
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      overflow-wrap: anywhere;
     }
-    .na {
-      border: ;
+
+    /* ---------- room map ---------- */
+    #mapwrap { overflow-x: auto; padding: 4px 2px 8px; }
+    .front {
+      text-align: center;
+      font-size: 14px;
+      color: var(--muted);
+      border-bottom: 3px solid var(--line);
+      padding-bottom: 6px;
+      margin-bottom: 14px;
+    }
+    .room { display: grid; gap: 10px; }
+    .seat {
+      border: 2px solid var(--off-line);
+      border-radius: 10px;
+      padding: 8px 10px;
+      min-height: 64px;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      overflow-wrap: anywhere;
+      background: var(--panel);
+    }
+    .seat b { font-size: 15px; }
+    .seat.ok      { background: var(--ok-bg);   border-color: var(--ok);        color: var(--ok); }
+    .seat.warn    { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn); }
+    .seat.crit    { background: var(--crit-bg); border-color: var(--crit);      color: var(--crit); }
+    .seat.offline { background: var(--off-bg);  border-color: var(--off-line);  color: var(--off); }
+    .seat.none    { background: transparent; border-style: dashed; color: var(--muted); }
+    .seat b { color: var(--text); }
+    .seat .flag { color: var(--crit); font-weight: 700; }
+    .outside {
+      margin-top: 18px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 16px;
+    }
+    .outside h2 { font-size: 16px; margin: 0 0 6px; }
+    .outside ul { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 14px; }
+    .outside li { display: inline-flex; align-items: center; gap: 6px; }
+
+    @media (max-width: 600px) {
+      header { padding: 12px 16px; }
+      main { padding: 16px 16px 32px; }
+      .strip { gap: 10px 20px; padding: 14px 16px; }
+      .count b { font-size: 24px; }
     }
   </style>
 </head>
 <body>
-  <div id="status">กำลังเชื่อมต่อ...</div>
-  <div id="ovall"></div>
-  <div id="grid"></div>
-  <script>
-  const esc = (s) => String(s).replace(/[&<>"']/g,c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
-  function connect() {
-    const hn = location.hostname || "127.0.0.1";
-    const ws = new WebSocket("ws://" + hn + ":8080/dashboard");
-    const label = { ok: "ปกติ", warn: "เฝ้าระวัง", crit: "วิกฤต", offline: "ออฟไลน์" };
-    const bar = (label, v) => {
-      const p=Math.min(100,Math.max(0,Number(v)));
-      return `<div class="row"><span>${label}</span>
-              <div class="bar"><i style="width:${p}%"></i></div>
-              <span>${p.toFixed(0)}%</span></div>`;
-    };
-    ws.onopen = () => {
-      document.getElementById("status").textContent = "เชื่อมต่อแล้ว";
-    };
-    ws.onmessage = (e) => {
-      const dt = JSON.parse(e.data);
-      dt.machines.sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
-      let arr={ok: 0, warn: 0, crit: 0,offline: 0};
-      for (const m of dt.machines) arr[m.status]++;
-      let crd = dt.machines.map(m=>` <div class="card ${m.status}">
-        <div class="top">
-          <span class="name">${esc(m.id)}</span>
-          <span class="sub">${esc(m.ip)} status: ${label[m.status]}</span>
-          </div>
-          ${bar("CPU", m.cpu)}
-          ${bar("RAM", m.ram)}
-          ${bar("DISK", m.disk)}
-        <div class="sub">↓ ${Number(m.rx).toFixed(1)} KB/s &nbsp; ↑ ${Number(m.tx).toFixed(1)} KB/s</div>
-      </div>`).join("");
-      const ovl=Object.keys(label).map(k=>`${label[k]} ${arr[k]}`).join(" : ");
-      if (dt.machines.length===0) crd=`<p class="na">No Available PC yet</p>`;
-      document.getElementById("ovall").innerHTML=ovl;
-      document.getElementById("grid").innerHTML = crd;
-    };
-    ws.onclose = () => {
-      document.getElementById("status").textContent = "หลุดการเชื่อมต่อ กำลังต่อใหม่...";
-      setTimeout(connect, 2000);
-    };
+  <header>
+    <div class="brand">
+      <h1>Computer Inspector</h1>
+      <p data-t="subtitle"></p>
+    </div>
+    <div class="tools">
+      <div class="seg" id="views" role="group" hidden>
+        <button type="button" class="btn" data-v="cards" aria-pressed="true" data-t="cards"></button>
+        <button type="button" class="btn" data-v="map" aria-pressed="false" data-t="map"></button>
+      </div>
+      <button type="button" class="btn ico" id="lang"></button>
+      <button type="button" class="btn ico sq" id="theme"></button>
+    </div>
+  </header>
+  <main>
+    <section class="strip" aria-live="polite">
+      <div class="conn"><span class="dot wait" id="conndot"></span><span id="conntext"></span></div>
+      <div id="counts" style="display:contents"></div>
+    </section>
+    <div class="banner" id="lost" hidden></div>
+    <p class="note" id="lnote" hidden></p>
+    <div id="grid"></div>
+    <div id="map" hidden></div>
+  </main>
 
+  <script>
+  // ---------- text, Thai and English ----------
+  const TXT = {
+    th: {
+      subtitle: "แดชบอร์ดครู", cards: "การ์ด", map: "ผังห้อง",
+      langCode: "EN", langLabel: "เปลี่ยนเป็นภาษาอังกฤษ (English)",
+      dark: "เปลี่ยนเป็นโหมดมืด", light: "เปลี่ยนเป็นโหมดสว่าง",
+      connecting: "กำลังเชื่อมต่อเซิร์ฟเวอร์...", connected: "เชื่อมต่อแล้ว",
+      lost: "หลุดการเชื่อมต่อ กำลังต่อใหม่... ข้อมูลด้านล่างอาจไม่เป็นปัจจุบัน",
+      ok: "ปกติ", warn: "เฝ้าระวัง", crit: "วิกฤต", offline: "ออฟไลน์",
+      waiting: "รอข้อมูลจากเซิร์ฟเวอร์...",
+      empty: "ยังไม่มีเครื่องเชื่อมต่อ", emptyHint: "รันคำสั่งนี้บนเครื่องนักเรียนแต่ละเครื่อง:",
+      down: "รับ", up: "ส่ง", noData: s => `ไม่ได้รับข้อมูล ${s} วินาที`,
+      learning: "กำลังเรียนรู้ค่าปกติของเครื่องนี้ (ยังไม่แจ้งเตือน)",
+      histLoading: "กำลังโหลดประวัติ...", histErr: "โหลดประวัติไม่ได้ จะลองใหม่อัตโนมัติ",
+      histFew: "ยังมีข้อมูลไม่พอสำหรับกราฟ (เก็บทุก 10 วินาที)",
+      histFoot: "1 ชั่วโมงล่าสุด · เส้นประ = ค่าปกติ", abn: "ผิดไปจากปกติของเครื่องนี้",
+      front: "หน้าห้อง", seatNoData: "ไม่มีข้อมูล", outside: "ไม่อยู่ในผัง",
+      mapLabel: "ผังห้อง (เลื่อนซ้ายขวาได้)",
+      layoutMissing: "ยังไม่มีผังที่นั่ง: วางไฟล์ layout.json ไว้โฟลเดอร์เดียวกับโปรแกรม server แล้วโหลดหน้านี้ใหม่",
+      layoutBad: "ไฟล์ layout.json ไม่ถูกต้อง จึงแสดงแบบการ์ดแทน",
+      layoutFail: "โหลดผังที่นั่งไม่ได้ จึงแสดงแบบการ์ดแทน",
+    },
+    en: {
+      subtitle: "Teacher dashboard", cards: "Cards", map: "Room map",
+      langCode: "TH", langLabel: "Switch to Thai (ภาษาไทย)",
+      dark: "Switch to dark mode", light: "Switch to light mode",
+      connecting: "Connecting to the server...", connected: "Connected",
+      lost: "Connection lost, reconnecting... The data below may be out of date.",
+      ok: "Normal", warn: "Watch", crit: "Critical", offline: "Offline",
+      waiting: "Waiting for data from the server...",
+      empty: "No computers have connected yet", emptyHint: "Run this on each student PC:",
+      down: "Down", up: "Up", noData: s => `No data for ${s} s`,
+      learning: "Learning this computer's normal usage (no alerts yet)",
+      histLoading: "Loading history...", histErr: "Could not load history, retrying automatically",
+      histFew: "Not enough data for graphs yet (saved every 10 s)",
+      histFoot: "Last hour · dashed line = normal", abn: "Unusual for this computer",
+      front: "Front of room", seatNoData: "No data", outside: "Not in the layout",
+      mapLabel: "Room map (scrolls sideways)",
+      layoutMissing: "No seat map yet: put layout.json in the same folder as the server program, then reload this page",
+      layoutBad: "layout.json is invalid, showing cards instead",
+      layoutFail: "Could not load the seat map, showing cards instead",
+    },
+  };
+  const STATES = ["ok", "warn", "crit", "offline"];
+  // simple stroke icons drawn for this page (24x24 grid)
+  const ICON = {
+    globe: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>`,
+    moon: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>`,
+    sun: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>`,
+  };
+  const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const $ = (id) => document.getElementById(id);
+
+  // per-viewer settings; storage may be blocked, so every access is guarded
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  };
+  let lang = store.get("ci-lang") === "en" ? "en" : "th";
+  let theme = store.get("ci-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  let view = store.get("ci-view") === "map" ? "map" : "cards";
+  let conn = "connecting";      // connecting | connected | lost
+  let lastDt = null;            // last snapshot from the server
+  let layout = null;            // checked layout.json, or null
+  let layoutNote = null;        // key of the note to show about layout.json
+  const t = () => TXT[lang];
+
+  // ---------- history graphs (fetched every 10 s per machine from /history) ----------
+  const hist = {};              // id -> {data, err, at}
+  function loadHist(id) {
+    const h = hist[id] || (hist[id] = { data: null, err: false, at: 0 });
+    if (Date.now() - h.at < 10000) return;
+    h.at = Date.now();
+    fetch("/history?id=" + encodeURIComponent(id), { cache: "no-store" })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(d => { h.data = d; h.err = false; })
+      .catch(() => { h.err = true; });
   }
+  function spark(d, key) {
+    const ys = (d[key] || []).map(Number);
+    const mean = d.base && d.base[key] ? Number(d.base[key].mean) || 0 : 0;
+    const top = key === "cpu" ? 100 : Math.max(1, ...ys, mean * 1.5);
+    const W = 120, H = 24, n = ys.length;
+    const y = v => (H - 1 - (Math.min(v, top) / top) * (H - 2)).toFixed(1);
+    const pts = ys.map((v, i) => `${(i / (n - 1) * W).toFixed(1)},${y(v)}`).join(" ");
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+      <line x1="0" x2="${W}" y1="${y(mean)}" y2="${y(mean)}" vector-effect="non-scaling-stroke"/>
+      <polyline points="${pts}" vector-effect="non-scaling-stroke"/></svg>`;
+  }
+  function histBlock(m) {
+    if (!("abn" in m) && !("learn" in m)) return "";     // server without history support
+    loadHist(m.id);
+    const h = hist[m.id], T = t();
+    const abn = Array.isArray(m.abn) ? m.abn : [];
+    const name = { cpu: "CPU", rx: T.down, tx: T.up };
+    let out = "";
+    if (abn.length) out += `<div class="abn">${esc(T.abn)}: ${abn.map(k => esc(name[k] || k)).join(", ")}</div>`;
+    else if (m.learn) out += `<div class="small">${esc(T.learning)}</div>`;
+    if (!h || (!h.data && !h.err)) return out + `<div class="small">${esc(T.histLoading)}</div>`;
+    if (h.err && !h.data) return out + `<div class="small">${esc(T.histErr)}</div>`;
+    const d = h.data;
+    if (!d.t || d.t.length < 2) return out + `<div class="small">${esc(T.histFew)}</div>`;
+    for (const k of ["cpu", "rx", "tx"]) {
+      const now = k === "cpu" ? `${Number(m.cpu).toFixed(0)}%` : Number(m[k]).toFixed(1);
+      out += `<div class="spark${abn.includes(k) ? " hot" : ""}"><span>${esc(name[k])}</span>${spark(d, k)}<span class="v">${now}</span></div>`;
+    }
+    return out + `<div class="small">${esc(T.histFoot)}</div>`;
+  }
+
+  // ---------- cards ----------
+  // same limits as the server's status rules (server/main.cpp)
+  function meter(label, v, warnAt, critAt) {
+    const p = Math.min(100, Math.max(0, Number(v) || 0));
+    const cls = p >= critAt ? " hotter" : p >= warnAt ? " hot" : "";
+    return `<div class="row${cls}"><span>${label}</span><div class="bar"><i style="width:${p}%"></i></div><span class="v">${p.toFixed(0)}%</span></div>`;
+  }
+  function card(m) {
+    const T = t(), st = STATES.includes(m.status) ? m.status : "offline";
+    const off = st === "offline";
+    const meta = [m.ip, m.os].filter(Boolean).map(esc).join(" · ");
+    return `<article class="card ${st}">
+      <div class="head">
+        <div><div class="name">${esc(m.id)}</div><div class="meta">${meta}</div></div>
+        <span class="state ${st}"><span class="dot"></span>${esc(T[st])}</span>
+      </div>
+      ${off ? `<div class="small">${esc(T.noData(Math.round((Number(m.age) || 0) / 1000)))}</div>` : ""}
+      <div class="metrics">
+        ${meter("CPU", m.cpu, off ? 999 : 80, off ? 999 : 90)}
+        ${meter("RAM", m.ram, off ? 999 : 80, off ? 999 : 90)}
+        ${meter("Disk", m.disk, off ? 999 : 85, off ? 999 : 95)}
+        <div class="net"><span>${esc(T.down)} ${Number(m.rx).toFixed(1)} KB/s</span><span>${esc(T.up)} ${Number(m.tx).toFixed(1)} KB/s</span></div>
+      </div>
+      ${off ? "" : `<div class="hist">${histBlock(m)}</div>`}
+    </article>`;
+  }
+
+  // ---------- seat map ----------
+  // layout.json: {"cols":6,"seats":{"A-01":[0,0],"A-02":[1,0]}}  values are [column, row], row 0 = front
+  function checkLayout(j) {
+    if (!j || typeof j !== "object" || Array.isArray(j)) return null;
+    const cols = j.cols;
+    if (!Number.isInteger(cols) || cols < 1 || cols > 30) return null;
+    if (!j.seats || typeof j.seats !== "object" || Array.isArray(j.seats)) return null;
+    const seats = [], used = new Set();
+    for (const [id, p] of Object.entries(j.seats)) {
+      if (!Array.isArray(p) || p.length !== 2) return null;
+      const [c, r] = p;
+      if (!Number.isInteger(c) || !Number.isInteger(r) || c < 0 || c >= cols || r < 0 || r >= 50) return null;
+      if (used.has(c + "," + r)) return null;     // two computers on one seat
+      used.add(c + "," + r);
+      seats.push({ id: String(id), c, r });
+    }
+    return seats.length ? { cols, seats } : null;
+  }
+  function loadLayout() {
+    fetch("/layout.json", { cache: "no-store" })
+      .then(r => {
+        if (r.status === 404) throw new Error("layoutMissing");
+        if (!r.ok) throw new Error("layoutFail");
+        return r.json().catch(() => { throw new Error("layoutBad"); });
+      })
+      .then(j => {
+        layout = checkLayout(j);
+        if (!layout) throw new Error("layoutBad");
+        layoutNote = null;
+        render();
+      })
+      .catch(e => {
+        layout = null;
+        layoutNote = TXT.th[e.message] ? e.message : "layoutFail";
+        render();
+      });
+  }
+  function renderMap(ms) {
+    const T = t();
+    const byId = new Map(ms.map(m => [m.id, m]));
+    const inLayout = new Set(layout.seats.map(s => s.id));
+    const tiles = layout.seats.map(s => {
+      const m = byId.get(s.id);
+      const st = m && STATES.includes(m.status) ? m.status : "none";
+      const info = m ? T[st] : T.seatNoData;
+      const extra = !m || st === "offline" ? ""
+        : (Array.isArray(m.abn) && m.abn.length) ? `<span class="flag">${esc(T.abn)}</span>`
+        : `<span>CPU ${Number(m.cpu).toFixed(0)}%</span>`;
+      return `<div class="seat ${st}" style="grid-column:${s.c + 1};grid-row:${s.r + 1}">
+        <b>${esc(s.id)}</b><span>${esc(info)}</span>${extra}</div>`;
+    }).join("");
+    const out = ms.filter(m => !inLayout.has(m.id));
+    const outside = out.length
+      ? `<div class="outside"><h2>${esc(T.outside)} (${out.length})</h2><ul>${out.map(m =>
+          `<li class="${esc(m.status)}"><span class="dot"></span>${esc(m.id)}: ${esc(T[m.status] || m.status)}</li>`).join("")}</ul></div>`
+      : "";
+    return `<div id="mapwrap" tabindex="0" role="region" aria-label="${esc(T.mapLabel)}"><div class="front">${esc(T.front)}</div>
+      <div class="room" style="grid-template-columns:repeat(${layout.cols},minmax(84px,1fr))">${tiles}</div></div>${outside}`;
+  }
+
+  // ---------- page ----------
+  function render() {
+    const T = t();
+    document.documentElement.lang = lang;
+    document.documentElement.dataset.theme = theme;
+    for (const el of document.querySelectorAll("[data-t]")) el.textContent = T[el.dataset.t];
+    $("lang").innerHTML = ICON.globe + `<span class="code" aria-hidden="true">${T.langCode}</span>`;
+    $("lang").setAttribute("aria-label", T.langLabel);
+    $("lang").title = T.langLabel;
+    // the icon shows the mode you switch TO: moon in light mode, sun in dark mode
+    const tl = theme === "dark" ? T.light : T.dark;
+    $("theme").innerHTML = theme === "dark" ? ICON.sun : ICON.moon;
+    $("theme").setAttribute("aria-label", tl);
+    $("theme").title = tl;
+    $("views").hidden = !layout;
+    for (const b of document.querySelectorAll("#views button")) b.setAttribute("aria-pressed", String(b.dataset.v === view));
+    $("lnote").hidden = !layoutNote;
+    $("lnote").textContent = layoutNote ? T[layoutNote] : "";
+
+    $("conndot").className = "dot " + ({ connecting: "wait", connected: "live", lost: "lost" })[conn];
+    $("conntext").textContent = T[conn === "lost" ? "connecting" : conn];
+    $("lost").hidden = conn !== "lost";
+    $("lost").textContent = T.lost;
+
+    const ms = lastDt ? lastDt.machines : [];
+    const n = { ok: 0, warn: 0, crit: 0, offline: 0 };
+    for (const m of ms) if (m.status in n) n[m.status]++;
+    $("counts").innerHTML = lastDt ? STATES.map(s =>
+      `<div class="count ${n[s] ? s : "zero"}"><b>${n[s]}</b><span>${esc(T[s])}</span></div>`).join("") : "";
+
+    const mapOn = view === "map" && !!layout;
+    $("grid").hidden = mapOn;
+    $("map").hidden = !mapOn;
+    if (!lastDt) {
+      $("grid").hidden = false; $("map").hidden = true;
+      $("grid").innerHTML = `<div class="empty" style="grid-column:1/-1"><p>${esc(T.waiting)}</p></div>`;
+      return;
+    }
+    if (!ms.length) {
+      $("grid").hidden = false; $("map").hidden = true;
+      const host = location.hostname || "<server-ip>";
+      $("grid").innerHTML = `<div class="empty" style="grid-column:1/-1"><h2>${esc(T.empty)}</h2>
+        <p>${esc(T.emptyHint)}</p><code>./agent --host ${esc(host)}</code></div>`;
+      return;
+    }
+    if (mapOn) $("map").innerHTML = renderMap(ms);
+    else $("grid").innerHTML = ms.map(card).join("");
+  }
+
+  for (const b of document.querySelectorAll("#views button"))
+    b.addEventListener("click", () => { view = b.dataset.v; store.set("ci-view", view); render(); });
+  $("lang").addEventListener("click", () => { lang = lang === "th" ? "en" : "th"; store.set("ci-lang", lang); render(); });
+  $("theme").addEventListener("click", () => { theme = theme === "dark" ? "light" : "dark"; store.set("ci-theme", theme); render(); });
+
+  function connect() {
+    const host = location.hostname || "127.0.0.1";
+    const ws = new WebSocket("ws://" + host + ":8080/dashboard");
+    ws.onopen = () => { conn = "connected"; render(); };
+    ws.onmessage = (e) => {
+      let dt;
+      try { dt = JSON.parse(e.data); } catch (err) { return; }
+      if (!dt || !Array.isArray(dt.machines)) return;
+      dt.machines.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+      lastDt = dt;
+      render();
+    };
+    ws.onclose = () => { if (conn !== "connecting" || lastDt) conn = "lost"; render(); setTimeout(connect, 2000); };
+  }
+  render();
+  loadLayout();
   connect();
-</script>
+  </script>
 </body>
 </html>
