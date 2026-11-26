@@ -1115,18 +1115,23 @@
     $("askc").hidden = !code;
     $("ask-yes").textContent = yes;
     $("ask-no").textContent = no;
-    const d = $("askdlg");
-    d.returnValue = "";
-    d.showModal();
+    $("askdlg").showModal();
     $("ask-no").focus();
     return new Promise(res => {
       askDone = v => {
-        askDone = null;
         const el = back && back();
         if (!v && el) el.focus();
         res(v);
       };
     });
+  }
+  // answer straight from the button / Esc, not from the dialog's "close" event (that one can
+  // arrive late, e.g. in a background tab)
+  function answer(v) {
+    const done = askDone;
+    askDone = null;
+    if ($("askdlg").open) $("askdlg").close();
+    if (done) done(v);
   }
 
   // ---------- removing an offline computer ----------
@@ -1240,13 +1245,14 @@
   $("lang").addEventListener("click", () => { lang = lang === "th" ? "en" : "th"; store.set("ci-lang", lang); render(); });
   $("theme").addEventListener("click", () => { theme = theme === "dark" ? "light" : "dark"; store.set("ci-theme", theme); render(); });
   $("edopen").addEventListener("click", edStart);
-  $("ask-yes").addEventListener("click", () => $("askdlg").close("yes"));
-  $("ask-no").addEventListener("click", () => $("askdlg").close("no"));
+  $("ask-yes").addEventListener("click", () => answer(true));
+  $("ask-no").addEventListener("click", () => answer(false));
   $("askdlg").addEventListener("click", e => {
     const r = $("askdlg").getBoundingClientRect();     // a click on the dialog's own padding also targets it
-    if (e.target === $("askdlg") && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) $("askdlg").close("no");
+    if (e.target === $("askdlg") && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) answer(false);
   });
-  $("askdlg").addEventListener("close", () => { if (askDone) askDone($("askdlg").returnValue === "yes"); });
+  $("askdlg").addEventListener("cancel", e => { e.preventDefault(); answer(false); });   // Esc
+  $("askdlg").addEventListener("close", () => { if (askDone) answer(false); });
   $("grid").addEventListener("click", e => {
     const b = e.target.closest("button[data-rm]");
     if (b) removeMachine(b.dataset.rm);
