@@ -2,6 +2,7 @@
 // Runs the same core as the console server and shows its state live.
 #define GL_SILENCE_DEPRECATION
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -160,20 +161,62 @@ static void address_row(app&a,const pal&p,sid label,sid hint,const char*key,cons
   }
 }
 
+// Icon buttons. ImGui cannot show SVG, so the icons are drawn with simple shapes,
+// in the text color, matching the web dashboard (globe + language code, moon / sun).
+static void icon_globe(ImDrawList*dl,ImVec2 c,float r,ImU32 col,float th) {
+  dl->AddCircle(c,r,col,0,th);
+  dl->AddLine(ImVec2(c.x-r,c.y),ImVec2(c.x+r,c.y),col,th);
+  dl->AddEllipse(c,ImVec2(r*0.45f,r),col,0.f,0,th);
+}
+// Crescent: a full disc, then a disc in the button's own color cut out of it.
+static void icon_moon(ImDrawList*dl,ImVec2 c,float r,ImU32 col,ImU32 bg) {
+  dl->AddCircleFilled(c,r,col);
+  dl->AddCircleFilled(ImVec2(c.x+r*0.5f,c.y-r*0.42f),r*0.82f,bg);
+}
+static void icon_sun(ImDrawList*dl,ImVec2 c,float r,ImU32 col,float th) {
+  dl->AddCircleFilled(c,r*0.42f,col);
+  for (int i=0;i<8;i++) {
+    float an=i*3.14159265f/4.f,dx=std::cos(an),dy=std::sin(an);
+    dl->AddLine(ImVec2(c.x+dx*r*0.66f,c.y+dy*r*0.66f),ImVec2(c.x+dx*r,c.y+dy*r),col,th);
+  }
+}
+static ImU32 item_bg() {
+  return ImGui::GetColorU32(ImGui::IsItemActive()?ImGuiCol_ButtonActive:ImGui::IsItemHovered()?ImGuiCol_ButtonHovered:ImGuiCol_Button);
+}
+
 static void draw_header(app&a,const pal&p) {
+  (void)p;
   ImGui::PushFont(a.title); ImGui::TextUnformatted(T(a,S_TITLE)); ImGui::PopFont();
   ImGui::SameLine(0,12*a.scale);
   ImGui::AlignTextToFramePadding();
   ImGui::TextDisabled("%s",T(a,S_SUBTITLE));
-  const char*l1=T(a,S_LANG_SWITCH);
-  const char*l2=a.dark?T(a,S_LIGHT):T(a,S_DARK);
+
   ImGuiStyle&st=ImGui::GetStyle();
-  float w=ImGui::CalcTextSize(l1).x+ImGui::CalcTextSize(l2).x+st.FramePadding.x*4+st.ItemSpacing.x;
-  float x=ImGui::GetWindowContentRegionMax().x-w;
+  float h=ImGui::GetFrameHeight(),r=h*0.24f,gap=7*a.scale,th=std::max(1.f,1.6f*a.scale);
+  const char*code=a.lang==TH?"EN":"TH";            // the language you switch to
+  ImVec2 code_sz=a.bold->CalcTextSizeA(ImGui::GetFontSize(),FLT_MAX,0.f,code);
+  ImVec2 lsz(st.FramePadding.x*2+r*2+gap+code_sz.x,h),tsz(h,h);
+  float x=ImGui::GetWindowContentRegionMax().x-(lsz.x+st.ItemSpacing.x+tsz.x);
   ImGui::SameLine(std::max(x,ImGui::GetCursorPosX()));
-  if (ImGui::Button((std::string(l1)+"###lang").c_str())) a.lang=a.lang==TH?EN:TH;
+  ImU32 fg=ImGui::GetColorU32(ImGuiCol_Text);
+  ImDrawList*dl=ImGui::GetWindowDrawList();
+
+  bool lang_hit=ImGui::Button("###lang",lsz);
+  ImVec2 mn=ImGui::GetItemRectMin();
+  ImVec2 c(mn.x+st.FramePadding.x+r,mn.y+h*0.5f);
+  icon_globe(dl,c,r,fg,th);
+  dl->AddText(a.bold,ImGui::GetFontSize(),ImVec2(c.x+r+gap,mn.y+(h-code_sz.y)*0.5f),fg,code);
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s",T(a,S_LANG_SWITCH));
+
   ImGui::SameLine();
-  if (ImGui::Button((std::string(l2)+"###theme").c_str())) {a.dark=!a.dark; apply_theme(a.dark?DARK:LIGHT,a.scale);}
+  bool theme_hit=ImGui::Button("###theme",tsz);
+  ImVec2 tc((ImGui::GetItemRectMin().x+ImGui::GetItemRectMax().x)*0.5f,(ImGui::GetItemRectMin().y+ImGui::GetItemRectMax().y)*0.5f);
+  if (a.dark) icon_sun(dl,tc,r*1.05f,fg,th);       // shows the mode you switch to
+  else icon_moon(dl,tc,r*0.95f,fg,item_bg());
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s",a.dark?T(a,S_LIGHT):T(a,S_DARK));
+
+  if (lang_hit) a.lang=a.lang==TH?EN:TH;
+  if (theme_hit) {a.dark=!a.dark; apply_theme(a.dark?DARK:LIGHT,a.scale);}
 }
 
 // The focal panel: is the server up, and where do agents and teachers connect.
