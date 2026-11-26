@@ -33,7 +33,7 @@ Status: `[x]` done, `[ ]` planned.
 - [x] Send statistics to a central server over WebSocket
 - [x] Teacher dashboard: one card per computer (ok / warning / critical / offline)
 - [ ] Classroom seat map
-- [ ] Stat history and per-machine baseline, to flag abnormal usage
+- [x] Stat history and per-machine baseline, to flag abnormal usage
 - [ ] Grouped alerts (e.g. a whole row goes offline → likely a switch problem)
 - [ ] On-demand screen streaming with adaptive quality
 - [ ] Limited host control (send message, lock screen) with authentication
@@ -63,6 +63,34 @@ cmake --build build #<--target <server/agent> (This section is optional: default
 ./build/agent #or you can use ./build/server if you compiled server source code
 ```
  
+## History and abnormal usage
+
+The server keeps, for every computer, the last hour of CPU, download (rx) and upload (tx)
+as 10-second averages, and learns what is normal for that computer:
+
+- **Baseline:** an exponentially weighted moving average (EWMA) of the value and of its
+  variance, with a 10-minute half-life. Samples that look abnormal are not added to it,
+  so a spike cannot slowly become "normal".
+- **Abnormal** when all three hold: z-score `(value - mean) / sd` above 3, the value is
+  above a minimum (CPU 20 %, network 100 KB/s), and it lasts 5 samples in a row (about 5 s).
+- **Learning period:** no alerts during the first 15 minutes of each computer.
+- Saved to `history/<id>.jsonl` (one JSON line per 10 s with the averages and the baseline
+  at that moment; the last day is kept). On restart the graphs and the exact baseline are
+  restored, so learning does not start again. IDs that are not safe file names (letters, digits, `-`, `_`, `.`) stay in memory only.
+
+The snapshot sent to dashboards gains two fields per machine (existing fields unchanged):
+`abn` (e.g. `["rx"]`) and `learn` (true while still learning). `GET /history?id=<id>`
+returns the graph data and baseline for a computer the server has seen.
+
+Server options:
+
+```
+./build/server --learn-min 15 --history-dir history   # defaults
+./build/server --no-history-files                     # keep history in memory only
+```
+
+Test: `tests/baseline_test.py` (see the docstring); results are in `docs/`.
+
 ## Privacy
  
 Intended for classrooms where users know the system is running. Screen viewing (when

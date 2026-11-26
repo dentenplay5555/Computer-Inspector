@@ -20,6 +20,8 @@
 #include <stdexcept>
 #include <cmath>
 #include "netinfo.hpp"
+#include "history.hpp"
+#include <memory>
 using json=nlohmann::json;
 struct mah {
   std::string id,ip,os;
@@ -31,6 +33,7 @@ std::map<std::string, mah> g_mah;
 std::unordered_set<const void*> g_dash;
 std::atomic<bool> r{1};
 std::string pi="<localhost ip>";
+std::unique_ptr<history> g_hist;  // has its own lock; never call it while holding g_mu
 std::string read_f(const std::string&pth) {
   std::ifstream f(pth,std::ios::binary);
   std::stringstream ss;
@@ -56,7 +59,9 @@ json b_snp(const std::vector<mah>&snp,int64_t n) {
       {"status",stat(m,n)},
       {"cpu",m.cpu},{"ram",m.ram},{"disk",m.disk},
       {"rx",m.rx},{"tx",m.tx},
-      {"age",n-m.l_s}
+      {"age",n-m.l_s},
+      {"abn",g_hist->abnormal(m.id,n)},
+      {"learn",g_hist->learning(m.id,n)}
     });
   }
   return {{"type","snapshot"},{"ts",n},{"machines",arr}};
@@ -78,6 +83,8 @@ void hmsg(const std::string&ip, const std::string&txt) {
     std::string os=j.value("os","");
     if (!std::isfinite(cpu) || !std::isfinite(ram) || !std::isfinite(disk) || !std::isfinite(rx) || !std::isfinite(tx))return;
     if (cpu<0 || cpu>100 || ram<0 || ram>100 || disk<0 || disk>100 || rx<0 || tx<0) return;
+    int64_t now=now_ms();
+    {
     std::lock_guard<std::mutex> lock(g_mu);
     mah&m=g_mah[id];
     m.id=id;
@@ -87,12 +94,38 @@ void hmsg(const std::string&ip, const std::string&txt) {
     m.tx=tx;
     m.rx=rx;
     m.disk=disk;
-    m.l_s=now_ms();
+    m.l_s=now;
     m.os=os;
+    }
+    g_hist->add(id,now,cpu,rx,tx);
   } catch (json::exception&) {return;}
 }
-int main() {
+// "%41-01" -> "A-01". Returns false on a malformed escape.
+bool url_dec(const std::string&in,std::string&out) {
+  out.clear();
+  for (size_t i=0;i<in.size();i++) {
+    if (in[i]=='%') {
+      if (i+2>=in.size()||!std::isxdigit((unsigned char)in[i+1])||!std::isxdigit((unsigned char)in[i+2])) return false;
+      out+=(char)std::stoi(in.substr(i+1,2),nullptr,16); i+=2;
+    } else if (in[i]=='+') out+=' ';
+    else out+=in[i];
+  }
+  return true;
+}
+int main(int argc,char*argv[]) {
+  hist_cfg hc;
+  for (int i=1;i<argc;i++) {
+    std::string a=argv[i];
+    if (a=="--learn-min"&&i+1<argc) {
+      try {int v=std::stoi(argv[++i]); if (v>=0&&v<=24*60) hc.learn_ms=(int64_t)v*60000;}
+      catch (const std::exception&) {std::cerr<<"--learn-min needs minutes, using 15\n";}
+    }
+    else if (a=="--history-dir"&&i+1<argc) hc.dir=argv[++i];
+    else if (a=="--no-history-files") hc.dir.clear();
+  }
+  g_hist=std::make_unique<history>(hc);
   ix::initNetSystem();
+  std::cout<<"History: "<<g_hist->load()<<" saved points loaded from "<<(hc.dir.empty()?std::string("(memory only)"):hc.dir+"/")<<", learning "<<hc.learn_ms/60000<<" min\n";
   ix::WebSocketServer wsr(8080,"0.0.0.0");
   netif rst=ipvfour();
   std::cout<<std::string(40,'=')<<"\nSERVER LOG\nUsing Network config: \n";
@@ -135,6 +168,16 @@ int main() {
   http.setOnConnectionCallback(
     [](ix::HttpRequestPtr rq,std::shared_ptr<ix::ConnectionState>)->ix::HttpResponsePtr {
       ix::WebSocketHttpHeaders head;
+      const std::string hp="/history?id=";
+      if (rq->uri.compare(0,hp.size(),hp)==0) {
+        std::string id;
+        // only ids the server has already seen; anything else is 404
+        if (url_dec(rq->uri.substr(hp.size()),id)&&g_hist->has(id)) {
+          head["Content-Type"]="application/json";
+          head["Cache-Control"]="no-store";
+          return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,g_hist->series(id).dump(-1,' ',false,json::error_handler_t::replace));
+        }
+      }
       if (rq->uri=="/"||rq->uri=="/index.html") {
         std::string by=read_f("dashboard/index.html");
         if (!by.empty()) {

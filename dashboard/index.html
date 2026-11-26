@@ -2,6 +2,7 @@
 <html lang="th">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Computer Inspector</title>
   <style>
     body { 
@@ -63,6 +64,33 @@
     .na {
       border: ;
     }
+    /* history: one small graph per value, last hour */
+    .spark {
+      display: grid;
+      grid-template-columns: 42px 1fr 64px;
+      gap: 8px;
+      align-items: center;
+      font-size: 12px;
+      margin: 3px 0;
+    }
+    .spark svg {
+      width: 100%;
+      height: 22px;
+      display: block;
+    }
+    .spark .now {
+      text-align: right;
+    }
+    .abn {
+      color: #c62d25;
+      font-weight: 600;
+      font-size: 12px;
+      margin: 6px 0 2px;
+    }
+    .spark.hot {
+      color: #c62d25;
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
@@ -70,6 +98,50 @@
   <div id="ovall"></div>
   <div id="grid"></div>
   <script>
+  // ---- history graphs (fetched every 10 s per machine from /history) ----
+  const hist = {};          // id -> {data, err, at}
+  const NET = { cpu: "CPU", rx: "↓ KB/s", tx: "↑ KB/s" };
+  function loadHist(id) {
+    const h = hist[id] || (hist[id] = { data: null, err: false, at: 0 });
+    if (Date.now() - h.at < 10000) return;
+    h.at = Date.now();
+    fetch("/history?id=" + encodeURIComponent(id), { cache: "no-store" })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(d => { h.data = d; h.err = false; })
+      .catch(() => { h.err = true; });
+  }
+  // Polyline of the last hour; the dashed line is this machine's normal (baseline mean).
+  function spark(d, key, hot) {
+    const ys = d[key] || [];
+    const mean = d.base && d.base[key] ? Number(d.base[key].mean) || 0 : 0;
+    const top = key === "cpu" ? 100 : Math.max(1, ...ys, mean * 1.5);
+    const W = 120, H = 22, n = ys.length;
+    const y = v => (H - 1 - (Math.min(v, top) / top) * (H - 2)).toFixed(1);
+    const pts = ys.map((v, i) => `${(i / (n - 1) * W).toFixed(1)},${y(v)}`).join(" ");
+    const col = hot ? "#c62d25" : "#2f6fed";
+    const by = y(mean);
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+      <line x1="0" x2="${W}" y1="${by}" y2="${by}" stroke="#8a929c" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>
+      <polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`;
+  }
+  function histBlock(m) {
+    loadHist(m.id);
+    const h = hist[m.id];
+    const abn = Array.isArray(m.abn) ? m.abn : [];
+    let out = "";
+    if (abn.length) out += `<div class="abn">ผิดไปจากปกติของเครื่องนี้: ${abn.map(k => esc(NET[k] || k)).join(", ")}</div>`;
+    else if (m.learn) out += `<div class="sub">กำลังเรียนรู้ค่าปกติของเครื่องนี้ (ยังไม่แจ้งเตือน)</div>`;
+    if (!h || (!h.data && !h.err)) return out + `<div class="sub">กำลังโหลดประวัติ...</div>`;
+    if (h.err && !h.data) return out + `<div class="sub">โหลดประวัติไม่ได้ จะลองใหม่อัตโนมัติ</div>`;
+    const d = h.data;
+    if (!d.t || d.t.length < 2) return out + `<div class="sub">ยังมีข้อมูลไม่พอสำหรับกราฟ (เก็บทุก 10 วินาที)</div>`;
+    for (const k of ["cpu", "rx", "tx"]) {
+      const hot = abn.includes(k);
+      const now = k === "cpu" ? `${Number(m.cpu).toFixed(0)}%` : Number(m[k]).toFixed(1);
+      out += `<div class="spark${hot ? " hot" : ""}"><span>${NET[k]}</span>${spark(d, k, hot)}<span class="now">${now}</span></div>`;
+    }
+    return out + `<div class="sub">1 ชั่วโมงล่าสุด · เส้นประ = ค่าปกติ</div>`;
+  }
   const esc = (s) => String(s).replace(/[&<>"']/g,c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   function connect() {
     const hn = location.hostname || "127.0.0.1";
@@ -98,6 +170,7 @@
           ${bar("RAM", m.ram)}
           ${bar("DISK", m.disk)}
         <div class="sub">↓ ${Number(m.rx).toFixed(1)} KB/s &nbsp; ↑ ${Number(m.tx).toFixed(1)} KB/s</div>
+          ${histBlock(m)}
       </div>`).join("");
       const ovl=Object.keys(label).map(k=>`${label[k]} ${arr[k]}`).join(" : ");
       if (dt.machines.length===0) crd=`<p class="na">No Available PC yet</p>`;
