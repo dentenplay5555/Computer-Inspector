@@ -32,7 +32,7 @@ Status: `[x]` done, `[ ]` planned.
 - [x] Read CPU / RAM / network statistics (Windows)
 - [x] Send statistics to a central server over WebSocket
 - [x] Teacher dashboard: one card per computer (ok / warning / critical / offline)
-- [ ] Classroom seat map
+- [x] Classroom seat map
 - [ ] Stat history and per-machine baseline, to flag abnormal usage
 - [ ] Grouped alerts (e.g. a whole row goes offline → likely a switch problem)
 - [ ] On-demand screen streaming with adaptive quality
@@ -63,6 +63,26 @@ cmake --build build #<--target <server/agent> (This section is optional: default
 ./build/agent #or you can use ./build/server if you compiled server source code
 ```
  
+## Seat map
+
+The dashboard can show the room as a seat map, each seat colored by status. Write a
+`layout.json` and put it **in the same folder as the server executable** (for example
+`build/layout.json`). Start from `layout.example.json`:
+
+```
+{"cols": 6, "seats": {"A-01": [0, 0], "A-02": [1, 0], "B-01": [0, 1]}}
+```
+
+- Each key is a computer's id (the agent's `--id`, or its hostname by default).
+- Each value is `[column, row]`, counted from 0. Row 0 is the front of the room.
+- Seats with no computer reporting show grey and dashed; computers that are not in the
+  file are listed under "ไม่อยู่ในผัง" (not in the layout).
+- Without the file, or if it is invalid (bad numbers, two computers on one seat), the
+  dashboard stays in card view and says why.
+
+The server only serves this one path (`/layout.json`); the file is read again on every
+page load, so edits show after a refresh.
+
 ## Privacy
  
 Intended for classrooms where users know the system is running. Screen viewing (when

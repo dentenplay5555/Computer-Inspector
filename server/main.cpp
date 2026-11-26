@@ -20,6 +20,7 @@
 #include <stdexcept>
 #include <cmath>
 #include "netinfo.hpp"
+#include "exedir.hpp"
 using json=nlohmann::json;
 struct mah {
   std::string id,ip,os;
@@ -135,6 +136,17 @@ int main() {
   http.setOnConnectionCallback(
     [](ix::HttpRequestPtr rq,std::shared_ptr<ix::ConnectionState>)->ix::HttpResponsePtr {
       ix::WebSocketHttpHeaders head;
+      // Seat map: only this exact path, read from the folder that holds the server executable.
+      if (rq->uri=="/layout.json") {
+        std::string lp=exe_dir()+"/layout.json";
+        std::error_code ec;
+        auto sz=std::filesystem::file_size(lp,ec);
+        if (!ec&&sz>0&&sz<=256*1024) {
+          head["Content-Type"]="application/json";
+          head["Cache-Control"]="no-store";
+          return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,read_f(lp));
+        }
+      }
       if (rq->uri=="/"||rq->uri=="/index.html") {
         std::string by=read_f("dashboard/index.html");
         if (!by.empty()) {
