@@ -66,6 +66,17 @@ Add `--agent` to also start an agent on the same computer (handy for testing wit
 other PCs). `./run.sh --help` lists the other options. Ctrl+C stops everything on
 Mac / Linux; on Windows, close the server window.
 
+To fill the dashboard without real PCs, start virtual agents in a second terminal:
+
+```
+./test.sh             # 12 agents A-01..B-06 + LAB-X, with warning, critical,
+                      # offline and download-jump cases mixed in
+./test.sh -n 30 --all-normal
+```
+
+They send the same JSON as the real agent and reconnect if the server restarts.
+`./test.sh --help` lists all options (needs Python 3, no extra packages).
+
 ## Build
  
 Requirements: a C++17 compiler and CMake.
