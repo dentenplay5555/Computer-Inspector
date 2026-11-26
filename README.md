@@ -32,6 +32,7 @@ Status: `[x]` done, `[ ]` planned.
 - [x] Read CPU / RAM / network statistics (Windows)
 - [x] Send statistics to a central server over WebSocket
 - [x] Teacher dashboard: one card per computer (ok / warning / critical / offline), Thai / English, light / dark
+- [x] Server window (`server_gui`): server status, connect addresses, live machine table, log (Thai / English, light / dark)
 - [x] Classroom seat map
 - [x] Stat history and per-machine baseline, to flag abnormal usage
 - [ ] Grouped alerts (e.g. a whole row goes offline → likely a switch problem)
@@ -49,6 +50,7 @@ Status: `[x]` done, `[ ]` planned.
 ```
 agent/       measures statistics on each computer
 server/      receives data from agents and serves the dashboard
+server/gui/  native window for the server (Dear ImGui + GLFW)
 dashboard/   web page for the teacher
 docs/        API reference and test notes
 ```
@@ -86,6 +88,18 @@ cmake -S . -B build #this section is optional but required to for first time you
 cmake --build build #<--target <server/agent> (This section is optional: default is agent) >
 ./build/agent #or you can use ./build/server if you compiled server source code
 ```
+
+Targets: `agent`, `server` (console) and `server_gui` (window). Both servers use the same
+core, so they behave the same. Run either one from the repository root so it can find
+`dashboard/index.html`.
+
+`server_gui` downloads GLFW, Dear ImGui and the Noto Sans / Noto Sans Thai fonts the first
+time CMake configures (the fonts are compiled into the binary). On Linux it needs the
+X11 or Wayland development packages; to skip it on a machine without a desktop:
+
+```
+cmake -S . -B build -DSERVER_GUI=OFF
+```
  
 ## History and abnormal usage
 
@@ -106,7 +120,7 @@ The snapshot sent to dashboards gains two fields per machine (existing fields un
 `abn` (e.g. `["rx"]`) and `learn` (true while still learning). `GET /history?id=<id>`
 returns the graph data and baseline for a computer the server has seen.
 
-Server options:
+Server options (`server` only; `server_gui` uses the defaults):
 
 ```
 ./build/server --learn-min 15 --history-dir history   # defaults
@@ -143,4 +157,4 @@ nothing is recorded.
 ## License
  
 [MIT](LICENSE). Third-party libraries and their licenses are listed in
-`THIRD_PARTY_NOTICES` (to be added in future (planned for websocket lib)). 
+`THIRD_PARTY_NOTICES`.
