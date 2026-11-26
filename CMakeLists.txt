@@ -39,6 +39,7 @@ endif()
 add_executable(server 
   server/main.cpp
   server/history.cpp
+  server/exedir.cpp
   ${SERVER_PLATFORM}
 )
 target_link_libraries(server PRIVATE ixwebsocket)
