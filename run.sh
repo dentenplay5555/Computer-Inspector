@@ -1,13 +1,13 @@
 #!/bin/sh
-# Build and start Computer Inspector on Mac or Linux.
+# build and start computer inspector on mac or linux
 #
 #   ./run.sh              build, start the server, open the dashboard in the browser
-#   ./run.sh --agent      also start an agent on this computer (to test without other PCs)
+#   ./run.sh --agent      also start an agent on this computer (to test without other pcs)
 #   ./run.sh --no-build   skip building (use what is already in build/)
 #   ./run.sh --no-browser do not open the browser
 #
-# Ctrl+C stops everything this script started.
-# If ./layout.json exists (seat map) and is newer, it is copied next to the server first.
+# ctrl+c stops everything this script started
+# if ./layout.json exists (seat map) and is newer, it is copied next to the server first
 set -e
 cd "$(dirname "$0")"
 

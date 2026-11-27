@@ -1,5 +1,5 @@
 #pragma once
-// UI strings for the server window, Thai and English.
+// ui strings for the server window, thai and english
 enum lang { TH=0, EN=1 };
 enum sid {
   S_TITLE, S_SUBTITLE,
@@ -17,7 +17,7 @@ enum sid {
   S_COUNT
 };
 inline const char* const STR[2][S_COUNT] = {
-  { // Thai
+  { // thai
     "Computer Inspector", "เซิร์ฟเวอร์ห้องเรียน",
     "English", "โหมดมืด", "โหมดสว่าง",
     "กำลังเริ่มเซิร์ฟเวอร์...", "กำลังทำงาน", "เริ่มเซิร์ฟเวอร์ไม่สำเร็จ", "ลองอีกครั้ง",
@@ -32,7 +32,7 @@ inline const char* const STR[2][S_COUNT] = {
     "รอเซิร์ฟเวอร์เริ่มทำงาน...", "เซิร์ฟเวอร์ยังไม่ทำงาน จึงยังรับข้อมูลจากเครื่องนักเรียนไม่ได้",
     "บันทึกเซิร์ฟเวอร์", "ล้าง", "ยังไม่มีบันทึก",
   },
-  { // English
+  { // english
     "Computer Inspector", "Classroom server",
     "ภาษาไทย", "Dark mode", "Light mode",
     "Starting the server...", "Running", "The server could not start", "Try again",

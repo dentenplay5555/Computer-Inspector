@@ -20,11 +20,11 @@ bool history::safe_id(const std::string&id) {
   return true;
 }
 
-// Learning period (detect=false): exact running mean/variance (Welford), so the baseline
-// is right after a few dozen samples. An EWMA started from zero spread would take many
-// half-lives to reach the real variance and raise false alerts in the meantime.
-// After learning: EWMA mean/variance (incremental form, Finch 2009). The baseline is NOT
-// updated with samples that look abnormal, so a spike cannot slowly turn itself into "normal".
+// learning period (detect=false): exact running mean/variance (Welford), so the baseline
+// is right after a few dozen samples. an EWMA started from zero spread would take many
+// half-lives to reach the real variance and raise false alerts in the meantime
+// after learning: EWMA mean/variance (incremental form, Finch 2009). the baseline is not
+// updated with samples that look abnormal, so a spike cannot slowly turn itself into "normal"
 void history::update(mach&m,const std::array<double,NV>&x,int64_t now,double dt_s,bool detect) {
   (void)now;
   double alpha=1.0-std::exp(-dt_s*std::log(2.0)/cfg_.half_life_s);
@@ -81,9 +81,9 @@ void history::add(const std::string&id,int64_t now,double cpu,double rx,double t
         int64_t t=m.bucket*STEP_MS;
         push_bucket(m,t,avg);
         if (!cfg_.dir.empty()&&safe_id(id)) {
-          // Save the baseline itself (mean, variance per value) and when learning began,
-          // so a restart restores it exactly. Rebuilding it from 10 s averages would
-          // underestimate the per-second spread and cause false alerts.
+          // save the baseline itself (mean, variance per value) and when learning began,
+          // so a restart restores it exactly. rebuilding it from 10 s averages would
+          // underestimate the per-second spread and cause false alerts
           json b=json::array();
           for (auto&v:m.v) b.push_back({v.mean,v.var,v.n});
           line=json{{"t",t},{"cpu",avg[0]},{"rx",avg[1]},{"tx",avg[2]},{"b",b},{"f",m.first}}.dump();
@@ -145,7 +145,7 @@ size_t history::load() {
       total++;
     }
     if (!m.last) continue;
-    // Restore the newest saved baseline; without one, learning starts again on the next sample.
+    // restore the newest saved baseline; without one, learning starts again on the next sample
     bool restored=lastf>0;
     for (int i=0;i<NV&&restored;i++) {
       const json&p=lastb[i];

@@ -39,7 +39,7 @@
     button { font: inherit; }
     :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
-    /* ---------- header ---------- */
+    /* header*/
     header {
       display: flex;
       flex-wrap: wrap;
@@ -77,7 +77,7 @@
 
     main { padding: 20px 24px 40px; max-width: 1600px; margin: 0 auto; }
 
-    /* ---------- status strip: the focal point ---------- */
+    /* status strip: the focal point*/
     .strip {
       display: flex;
       flex-wrap: wrap;
@@ -99,7 +99,7 @@
     .count.crit b, .count.crit span { color: var(--crit); }
     .count.offline b, .count.offline span { color: var(--off); }
 
-    /* identity motif: a status is always a dot plus a word, never color alone */
+    /* identity motif: a status is always a dot plus a word, never color alone*/
     .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; background: var(--off); }
     .ok .dot, .dot.ok { background: var(--ok); }
     .warn .dot, .dot.warn { background: var(--warn); }
@@ -118,7 +118,7 @@
     }
     .note { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
 
-    /* ---------- cards ---------- */
+    /* cards*/
     #grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr));
@@ -130,12 +130,12 @@
       border-radius: 12px;
       padding: 18px 20px;
     }
-    /* only cards that need the teacher get a colored outline */
+    /* only cards that need the teacher get a colored outline*/
     .card.warn { border: 2px solid var(--warn-line); }
     .card.crit { border: 2px solid var(--crit); }
     .card.offline { background: var(--off-bg); }
     .card.offline .metrics { opacity: .55; }
-    /* card top: name + edit button, then status · ID · IP · OS */
+    /* card top: name + edit button, then status · id · ip · os*/
     .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
     .name { font-weight: 700; font-size: 18px; line-height: 1.3; overflow-wrap: anywhere; padding-top: 2px; }
     .sub { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin: 4px 0 14px; }
@@ -186,12 +186,12 @@
       padding: 8px 14px;
       border-radius: 8px;
       font-size: 15px;
-      /* a command to type: monospace so "--host" cannot look like a dash */
+      /* a command to type: monospace so "--host" cannot look like a dash*/
       font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
       overflow-wrap: anywhere;
     }
 
-    /* ---------- room map ---------- */
+    /* room map*/
     #mapwrap, .mapwrap { overflow-x: auto; padding: 4px 2px 8px; }
     .front {
       text-align: center;
@@ -202,7 +202,7 @@
       margin-bottom: 14px;
     }
     .room { display: grid; gap: 10px; grid-auto-rows: minmax(64px, auto); }
-    /* label (aisle, teacher's desk...): no computer, only text, any size */
+    /* label (aisle, teacher's desk...): no computer, only text, any size*/
     .tag {
       border-radius: 10px;
       display: flex;
@@ -253,7 +253,7 @@
     .mapbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; margin-bottom: 12px; }
     #mapmsg { color: var(--ok); font-weight: 600; font-size: 14px; }
 
-    /* ---------- seat map editor ---------- */
+    /* seat map editor*/
     .edbar {
       display: flex;
       flex-wrap: wrap;
@@ -272,7 +272,7 @@
     .edhint { color: var(--muted); font-size: 14px; margin: 10px 0 0; }
     #ed-msg { min-height: 1.5em; margin: 4px 0 10px; font-size: 14px; color: var(--muted); }
     #ed-msg.bad { color: var(--crit); font-weight: 600; }
-    /* the page's own pop-up (<dialog>), not confirm(): some browsers block or auto-answer those */
+    /* the page's own pop-up (<dialog>), not confirm(): some browsers block or auto-answer those*/
     .ask {
       width: min(420px, calc(100vw - 32px));
       padding: 20px 22px 18px;
@@ -298,7 +298,7 @@
       overflow-wrap: anywhere;
       user-select: all;
     }
-    /* after removing a computer: how to add it back */
+    /* after removing a computer: how to add it back*/
     .notice {
       display: flex;
       align-items: flex-start;
@@ -315,7 +315,7 @@
     .notice.bad { border-left-color: var(--crit); }
     .notice.bad p { color: var(--crit); font-weight: 600; }
     .offrow { margin: -6px 0 12px; }
-    /* quiet edit button: no outline until hovered or focused */
+    /* quiet edit button: no outline until hovered or focused*/
     .btn.edit {
       flex: none;
       width: 36px;
@@ -333,9 +333,9 @@
     .btn.edit svg { width: 18px; height: 18px; }
     .desc { margin: -6px 0 14px; font-size: 14px; color: var(--text); overflow-wrap: anywhere; white-space: pre-line; }
     .notice .nacts { display: flex; flex-wrap: wrap; gap: 8px; flex: none; }
-    /* computers removed on the dashboard */
+    /* computers removed on the dashboard*/
     #removed { margin-top: 14px; }
-    /* "Show removed computers": reads as text, still a 44 px target */
+    /* "show removed computers": reads as text, still a 44 px target*/
     .linkbtn {
       min-height: 44px;
       padding: 0 4px;
@@ -358,7 +358,7 @@
     #removed ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
     #removed li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
     #removed li .meta { margin-right: auto; }
-    /* computer details pop-up */
+    /* computer details pop-up*/
     .ask label { display: block; font-size: 14px; font-weight: 600; margin: 14px 0 4px; }
     .ask input[type="text"], .ask textarea {
       width: 100%;
@@ -398,7 +398,7 @@
     .blk[aria-pressed="true"] { outline: 3px solid var(--accent); outline-offset: 2px; }
     .blk.dragging { z-index: 3; cursor: grabbing; box-shadow: 0 6px 18px rgba(0, 0, 0, .2); }
     .blk.bad { outline: 3px solid var(--crit); outline-offset: 2px; }
-    /* resize grip, bottom-right corner of a label */
+    /* resize grip, bottom-right corner of a label*/
     .hdl {
       position: absolute;
       right: 0;
@@ -504,7 +504,7 @@
   </main>
 
   <script>
-  // ---------- text, Thai and English ----------
+  // text, thai and english
   const TXT = {
     th: {
       subtitle: "แดชบอร์ดครู", cards: "การ์ด", map: "ผังห้อง",
@@ -632,13 +632,13 @@
   let lastDt = null;            // last snapshot from the server
   let layout = null;            // checked layout.json, or null
   let layoutNote = null;        // key of the note to show about layout.json
-  let mapMsg = null;            // short "saved" message next to the Edit button
+  let mapMsg = null;            // short "saved" message next to the edit button
   let notice = null;            // {key, id, bad, act} shown under the status strip after remove / add back
   let can = false;              // this browser may manage computers (it is on the server computer)
   const nm = m => m.name || m.id;
   const t = () => TXT[lang];
 
-  // ---------- history graphs (fetched every 10 s per machine from /history) ----------
+  // history graphs (fetched every 10 s per machine from /history)
   const hist = {};              // id -> {data, err, at}
   function loadHist(id) {
     const h = hist[id] || (hist[id] = { data: null, err: false, at: 0 });
@@ -680,14 +680,14 @@
     return out + `<div class="small">${esc(T.histFoot)}</div>`;
   }
 
-  // ---------- cards ----------
+  // cards
   // same limits as the server's status rules (server/main.cpp)
   function meter(label, v, warnAt, critAt) {
     const p = Math.min(100, Math.max(0, Number(v) || 0));
     const cls = p >= critAt ? " hotter" : p >= warnAt ? " hot" : "";
     return `<div class="row${cls}"><span>${label}</span><div class="bar"><i style="width:${p}%"></i></div><span class="v">${p.toFixed(0)}%</span></div>`;
   }
-  // 45 s, 12 min, 3 h 5 min, 2 days 4 h (Thai units in Thai)
+  // 45 s, 12 min, 3 h 5 min, 2 days 4 h (thai units in thai)
   function fmtDur(ms) {
     const U = t().unit, s = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
     const m = Math.floor(s / 60), h = Math.floor(m / 60), d = Math.floor(h / 24);
@@ -717,11 +717,11 @@
     </article>`;
   }
 
-  // ---------- seat map ----------
+  // seat map
   // layout.json: {"cols":6, "rows":4, "seats":{"A-01":[0,0]}, "labels":[{"c":2,"r":0,"w":1,"h":4,"text":"aisle"}]}
-  // seats are [column, row], row 0 = front. "rows" and "labels" are optional; a label needs text.
-  // Blocks may not overlap.
-  // The server checks the same rules when the editor saves (check_layout in server/core.cpp).
+  // seats are [column, row], row 0 = front. "rows" and "labels" are optional; a label needs text
+  // blocks may not overlap
+  // the server checks the same rules when the editor saves (check_layout in server/core.cpp)
   const MAXC = 30, MAXR = 50;
   const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
   const overlaps = (a, b) => a.c < b.c + b.w && b.c < a.c + a.w && a.r < b.r + b.h && b.r < a.r + a.h;
@@ -800,9 +800,9 @@
       <div class="room" style="grid-template-columns:repeat(${layout.cols},minmax(84px,1fr));grid-template-rows:repeat(${layout.rows},minmax(64px,auto))">${labels}${tiles}</div></div>${outside}`;
   }
 
-  // ---------- seat map editor ----------
-  // Works on a copy of the layout; nothing changes on the server until Save.
-  // Blocks are seats (1 x 1, one computer) and labels (w x h, text such as "aisle").
+  // seat map editor
+  // works on a copy of the layout; nothing changes on the server until save
+  // blocks are seats (1 x 1, one computer) and labels (w x h, text such as "aisle")
   let ed = null;     // {cols, rows, seats, labels, sel, dirty, msg, msgBad, msgExtra, lang, trayKey}
   let drag = null;   // pointer drag in progress
   function edStart() {
@@ -815,7 +815,7 @@
   }
   async function edStop(force) {
     if (!ed) return;
-    if (ed.dirty && !force) {           // ask first; "Keep editing" is the safe default
+    if (ed.dirty && !force) {           // ask first; "keep editing" is the safe default
       const T = t();
       if (!await ask({ title: T.discard, body: T.discardHint, yes: T.discardYes, no: T.keep, back: () => $("ed-cancel") })) return;
       if (!ed) return;
@@ -1018,7 +1018,7 @@
     if (actAdd) for (const b of $("ed-tray").querySelectorAll("button[data-add]")) if (b.dataset.add === actAdd) b.focus();
   }
 
-  // ---- edits ----
+  // edits
   function edSet(k, i, c, r, w, h) {      // move and/or resize one block; false if it does not fit
     if (!edFits(k, i, c, r, w, h)) { edSay("noFit", true); return false; }
     const x = edItem(k, i);
@@ -1072,7 +1072,7 @@
     $("ed-addlb").focus();
   }
 
-  // ---- pointer: drag to move, drag the corner grip to resize, tap a block then tap a cell ----
+  // pointer: drag to move, drag the corner grip to resize, tap a block then tap a cell
   function cellAt(g, x, y) {
     const R = g.getBoundingClientRect(), cs = getComputedStyle(g);
     const gx = parseFloat(cs.columnGap) || 0, gy = parseFloat(cs.rowGap) || 0;
@@ -1140,7 +1140,7 @@
     });
   }
 
-  // ---- output ----
+  // output
   function edOut() {
     const o = { cols: ed.cols, rows: ed.rows, seats: {} };
     for (const x of [...ed.seats].sort((a, b) => a.r - b.r || a.c - b.c)) o.seats[x.id] = [x.c, x.r];
@@ -1200,9 +1200,9 @@
     $("edopen").focus();
   }
 
-  // ---------- the page's own yes/no pop-up ----------
-  // Not confirm(): some browsers block or auto-answer it. Resolves true only for "yes";
-  // Esc, the backdrop and "no" all mean no. "no" has focus first.
+  // the page's own yes/no pop-up
+  // not confirm(): some browsers block or auto-answer it. resolves true only for "yes"
+  // esc, the backdrop and "no" all mean no. "no" has focus first
   let askDone = null;
   function ask({ title, body, code, yes, no, back }) {
     $("askq").textContent = title;
@@ -1221,7 +1221,7 @@
       };
     });
   }
-  // answer straight from the button / Esc, not from the dialog's "close" event (that one can
+  // answer straight from the button / esc, not from the dialog's "close" event (that one can
   // arrive late, e.g. in a background tab)
   function answer(v) {
     const done = askDone;
@@ -1230,8 +1230,8 @@
     if (done) done(v);
   }
 
-  // ---------- managing computers: name, description, remove, add back ----------
-  // Only on the server computer (GET /me says so); the server checks again on every change.
+  // managing computers: name, description, remove, add back
+  // only on the server computer (get /me says so); the server checks again on every change
   async function post(path, body) {
     try {
       const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
@@ -1319,8 +1319,8 @@
         ? `<button type="button" class="btn" data-key="back:${esc(x.id)}">${esc(T.addBack)}</button>` : ""}</li>`).join("")}</ul></div>`;
   }
 
-  // Cards are redrawn every second. Skip a redraw that changes nothing, never redraw under a
-  // pressed mouse button (the click would be lost), and keep focus on a button that has it.
+  // cards are redrawn every second. skip a redraw that changes nothing, never redraw under a
+  // pressed mouse button (the click would be lost), and keep focus on a button that has it
   let pressed = null;           // element under a pressed mouse button
   function setHTML(el, html) {
     if (el._html === html || (pressed && el.contains(pressed))) return;
@@ -1330,7 +1330,7 @@
     if (key) for (const b of el.querySelectorAll("[data-key]")) if (b.dataset.key === key) b.focus();
   }
 
-  // ---------- page ----------
+  // page
   function render() {
     const T = t();
     document.documentElement.lang = lang;
@@ -1339,7 +1339,7 @@
     $("lang").innerHTML = ICON.globe + `<span class="code" aria-hidden="true">${T.langCode}</span>`;
     $("lang").setAttribute("aria-label", T.langLabel);
     $("lang").title = T.langLabel;
-    // the icon shows the mode you switch TO: moon in light mode, sun in dark mode
+    // the icon shows the mode you switch to: moon in light mode, sun in dark mode
     const tl = theme === "dark" ? T.light : T.dark;
     $("theme").innerHTML = theme === "dark" ? ICON.sun : ICON.moon;
     $("theme").setAttribute("aria-label", tl);
@@ -1413,7 +1413,7 @@
     const r = $("askdlg").getBoundingClientRect();     // a click on the dialog's own padding also targets it
     if (e.target === $("askdlg") && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) answer(false);
   });
-  $("askdlg").addEventListener("cancel", e => { e.preventDefault(); answer(false); });   // Esc
+  $("askdlg").addEventListener("cancel", e => { e.preventDefault(); answer(false); });   // esc
   $("askdlg").addEventListener("close", () => { if (askDone) answer(false); });
   $("grid").addEventListener("click", e => {
     const b = e.target.closest("button[data-key^='edit:']");
@@ -1428,7 +1428,7 @@
   for (const ev of ["pointerup", "pointercancel"]) addEventListener(ev, () => { pressed = null; }, true);
   $("noticex").addEventListener("click", () => { notice = null; render(); });
   $("noticea").addEventListener("click", () => { if (notice && notice.act) restoreMachine(notice.act.id); });
-  // details pop-up: Esc, Cancel and the backdrop close it without saving
+  // details pop-up: esc, cancel and the backdrop close it without saving
   $("mform").addEventListener("submit", e => { e.preventDefault(); saveEdit(); });
   $("mcancel").addEventListener("click", () => closeEdit(true));
   $("mrm").addEventListener("click", () => { if (mId) removeMachine(mId); });

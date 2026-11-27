@@ -15,7 +15,7 @@
 
 namespace ix { class WebSocketServer; class HttpServer; }
 
-// Latest numbers reported by one agent.
+// latest numbers reported by one agent
 struct mah {
   std::string id,ip,os;
   std::string name,desc;   // set by the teacher on the dashboard (machines.json); may be empty
@@ -28,21 +28,21 @@ enum class lvl { info, warn, err };
 int64_t now_ms();
 const char* status_of(const mah&m,int64_t n); // "ok", "warn", "crit" or "offline"
 
-// Owns the agent WebSocket server (ws_port) and the dashboard HTTP server (http_port).
-// Shared by the console server and the GUI so both behave the same.
+// owns the agent websocket server (ws_port) and the dashboard http server (http_port)
+// shared by the console server and the gui so both behave the same
 class core {
 public:
   int ws_port=8080, http_port=8081;
   std::function<void(lvl,const std::string&)> on_log;
-  // Called once a second from the tick thread, after the snapshot went to the dashboards.
+  // called once a second from the tick thread, after the snapshot went to the dashboards
   std::function<void(const std::vector<mah>&,int64_t)> on_tick;
-  // History / baseline settings; read once, on the first start().
+  // history / baseline settings; read once, on the first start()
   hist_cfg hist;
 
   core();
   ~core();
-  // Detects the LAN address, starts both servers and the tick thread.
-  // Returns false and fills err when a port cannot be opened.
+  // detects the lan address, starts both servers and the tick thread
+  // returns false and fills err when a port cannot be opened
   bool start(std::string&err);
   void stop();
   bool running() const {return run_;}
@@ -51,18 +51,18 @@ public:
   std::vector<mah> machines() const;
   int dash_count() const;
   int agent_count() const;
-  // Takes a computer off the list (dashboards, the window), online or not. Its data is then
-  // ignored until restore(); its history and baseline are kept. "" when done, else "unknown".
+  // takes a computer off the list (dashboards, the window), online or not. its data is then
+  // ignored until restore(); its history and baseline are kept. "" when done, else "unknown"
   std::string forget(const std::string&id);
-  // Puts a removed computer back; it shows again when its agent next sends data.
+  // puts a removed computer back; it shows again when its agent next sends data
   std::string restore(const std::string&id);
-  // Display name and description (empty clears). "" when done, else "unknown" or "too long".
+  // display name and description (empty clears). "" when done, else "unknown" or "too long"
   std::string set_meta(const std::string&id,const std::string&name,const std::string&desc);
   struct removed_pc {std::string id,name;};
   std::vector<removed_pc> removed() const;
-  // The browser is on this computer (loopback, or this computer's own LAN address).
+  // the browser is on this computer (loopback, or this computer's own lan address)
   bool is_local(const std::string&ip) const;
-  // Abnormal values ("cpu", "rx", "tx") and learning state; empty/false before the first start().
+  // abnormal values ("cpu", "rx", "tx") and learning state; empty/false before the first start()
   std::vector<std::string> abnormal(const std::string&id,int64_t now) const;
   bool learning(const std::string&id,int64_t now) const;
 

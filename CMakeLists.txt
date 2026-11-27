@@ -68,8 +68,8 @@ if (MINGW)
   target_link_options(server PRIVATE -static)
 endif()
 
-# ---------- server_gui: native window for the server (Dear ImGui + GLFW + OpenGL 3) ----------
-# Turn off with -DSERVER_GUI=OFF on machines without a desktop (Linux needs X11/Wayland dev packages).
+#  server_gui: native window for the server (dear imgui + glfw + opengl 3)
+# turn off with -DSERVER_GUI=OFF on machines without a desktop (linux needs x11/wayland dev packages)
 option(SERVER_GUI "Build the server_gui window" ON)
 if (SERVER_GUI)
   set(GLFW_BUILD_DOCS     OFF CACHE BOOL "" FORCE)
@@ -89,7 +89,7 @@ if (SERVER_GUI)
   FetchContent_MakeAvailable(glfw imgui)
   find_package(OpenGL REQUIRED)
 
-  # Noto Sans + Noto Sans Thai (SIL OFL 1.1), downloaded once and compiled into the binary.
+  # noto sans + noto sans thai (sil ofl 1.1), downloaded once and compiled into the binary
   set(FONT_DIR ${CMAKE_BINARY_DIR}/fonts)
   set(FONT_BASE https://github.com/notofonts/notofonts.github.io/raw/main/fonts)
   set(FONT_LIST
@@ -147,7 +147,7 @@ if (SERVER_GUI)
       target_link_options(server_gui PRIVATE /ENTRY:mainCRTStartup)
     endif()
     if (MINGW)
-      # No console window behind the GUI; MinGW's runtime still calls main().
+      # no console window behind the gui; mingw's runtime still calls main()
       set_target_properties(server_gui PROPERTIES WIN32_EXECUTABLE ON)
       target_link_options(server_gui PRIVATE -static)
     endif()
