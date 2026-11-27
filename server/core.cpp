@@ -17,6 +17,18 @@ static std::string read_f(const std::string&pth) {
   ss<<f.rdbuf();
   return ss.str();
 }
+// Puts tmp in place of dst. Some Windows C++ libraries refuse to rename onto an
+// existing file, so if the first try fails, remove dst and try again.
+static bool replace_file(const std::string&tmp,const std::string&dst) {
+  std::error_code ec;
+  std::filesystem::rename(tmp,dst,ec);
+  if (!ec) return true;
+  std::filesystem::remove(dst,ec);
+  std::filesystem::rename(tmp,dst,ec);
+  if (!ec) return true;
+  std::filesystem::remove(tmp,ec);
+  return false;
+}
 int64_t now_ms() {return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();}
 const char* status_of(const mah&m,int64_t n) {
   if (n-m.l_s>30000) return "offline";
@@ -267,9 +279,7 @@ bool core::start(std::string&err) {
           f<<fmt_layout(j);
           if (!f) return reply(500,"Internal Server Error","cannot write "+tmp);
         }
-        std::error_code ec;
-        std::filesystem::rename(tmp,lp,ec);
-        if (ec) {std::filesystem::remove(tmp,ec); return reply(500,"Internal Server Error","cannot replace "+lp);}
+        if (!replace_file(tmp,lp)) return reply(500,"Internal Server Error","cannot replace "+lp);
         log(lvl::info,"Seat map saved: "+lp);
         return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,"{\"ok\":true}");
       }
@@ -433,9 +443,7 @@ void core::save_meta() {
     f<<j.dump(2,' ',false,json::error_handler_t::replace)<<'\n';
     if (!f) {log(lvl::err,"Cannot write "+tmp);return;}
   }
-  std::error_code ec;
-  std::filesystem::rename(tmp,p,ec);
-  if (ec) {std::filesystem::remove(tmp,ec); log(lvl::err,"Cannot replace "+p);}
+  if (!replace_file(tmp,p)) log(lvl::err,"Cannot replace "+p);
 }
 
 netif core::net() const {std::lock_guard<std::mutex> lock(mu_); return net_;}
