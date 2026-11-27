@@ -69,6 +69,13 @@ Add `--agent` to also start an agent on the same computer (handy for testing wit
 other PCs). `./run.sh --help` lists the other options. Ctrl+C stops everything on
 Mac / Linux; on Windows, close the server window.
 
+On Windows, `run.bat` builds with [Ninja](https://ninja-build.org/) (`winget install
+Ninja-build.Ninja`, or `pacman -S mingw-w64-ucrt-x86_64-ninja` in MSYS2; Visual Studio's
+Developer Command Prompt already has it). Run it where a compiler is on PATH: MinGW `g++`,
+or the "x64 Native Tools Command Prompt for VS". A `build\` folder made earlier with NMake
+or Visual Studio is switched to Ninja automatically; saved `layout.json` and
+`machines.json` in it are kept.
+
 To fill the dashboard without real PCs, start virtual agents in a second terminal:
 
 ```
