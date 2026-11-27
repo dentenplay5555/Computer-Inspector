@@ -11,6 +11,8 @@
 #include <stdexcept>
 #ifdef _WIN32
   constexpr const char* osname="windows";
+#elif defined(__APPLE__)
+  constexpr const char* const osname="macos";
 #else 
   constexpr const char* const osname="linux";
 #endif
