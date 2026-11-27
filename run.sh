@@ -63,5 +63,6 @@ if [ "$BROWSER" = 1 ]; then
 fi
 echo "Running. Dashboard on this computer: $URL (other PCs: see the address the server printed)."
 echo "The browser warns about the certificate the first time: it is this server's own, accept it once."
+echo "First time: set the teacher password in the dashboard on this computer (or: ./build/server --set-password)."
 echo "Ctrl+C to stop."
 wait

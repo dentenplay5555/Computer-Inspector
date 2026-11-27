@@ -19,18 +19,7 @@ import argparse, json, os, random, sys, threading, time
 
 # tls with the pin, the websocket client and signing in are shared with virtual_agents.py
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ciproto import WS, Agent, KeyStore, Refused, pin_from_args, join_key_from_args, BUILD
-
-def ws_connect_retry(host, port, path, pin, wait_s=10):
-    # retry while the server is still starting up
-    deadline = time.time() + wait_s
-    while True:
-        try:
-            return WS(host, port, path, pin)
-        except ConnectionRefusedError:
-            if time.time() > deadline:
-                raise
-            time.sleep(0.5)
+from ciproto import Dashboard, Agent, KeyStore, Refused, pin_from_args, join_key_from_args, BUILD
 
 def main():
     ap = argparse.ArgumentParser()
@@ -40,6 +29,9 @@ def main():
     ap.add_argument("--pin-file", help="server.crt to take the pin from")
     ap.add_argument("--join-key", help="the server's join key (default: read build/agents.json)")
     ap.add_argument("--join-key-file", help="agents.json to take the join key from")
+    ap.add_argument("--http-port", type=int, default=8081)
+    ap.add_argument("--password", default=os.environ.get("CI_TEACHER_PASSWORD"),
+                    help="teacher password, to read the snapshots (or set CI_TEACHER_PASSWORD)")
     ap.add_argument("--key-file", default=os.path.join(BUILD, "baseline_test.keys.json"),
                     help="where the test pcs keep their own keys")
     ap.add_argument("--jump-at", type=int, default=900, help="seconds of normal traffic before JUMP-C jumps")
@@ -48,6 +40,12 @@ def main():
     ap.add_argument("--out", default="baseline_results.json")
     a = ap.parse_args()
     pin = pin_from_args(a.pin, a.pin_file)
+    if not a.password:
+        sys.exit("The test reads the dashboard's snapshots: give the teacher password with --password or CI_TEACHER_PASSWORD.")
+    try:
+        dash = Dashboard(a.host, a.http_port, pin, a.password)
+    except Refused as e:
+        sys.exit(str(e))
     store = KeyStore(a.key_file, pin)
     join_key = join_key_from_args(a.join_key, a.join_key_file)
     rnd = random.Random(a.seed)
@@ -58,13 +56,17 @@ def main():
     stop = threading.Event()
 
     def watch():
-        d = ws_connect_retry(a.host, a.port, "/dashboard", pin)
-        last = {}
+        # the dashboard's own way: GET /snapshot (new about once a second), logged in
+        last, seen = {}, None
         while not stop.is_set():
-            payload = d.recv(1)
-            if payload is None:
+            time.sleep(0.25)
+            try:
+                snap = dash.get_json("/snapshot")
+            except (OSError, ValueError):
                 continue
-            snap = json.loads(payload)
+            if snap.get("ts") == seen:
+                continue
+            seen = snap.get("ts")
             t = round(time.time() - start, 1)
             for m in snap.get("machines", []):
                 mid = m.get("id")

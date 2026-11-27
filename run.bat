@@ -42,4 +42,5 @@ if /i "%~1"=="--agent" start "Computer Inspector agent" "%BIN%\agent.exe" --host
 timeout /t 2 /nobreak >nul
 start "" https://127.0.0.1:8081
 echo Running. The browser warns about the certificate the first time: it is this server's own, accept it once.
+echo First time: set the teacher password in the dashboard on this computer, or run server.exe --set-password
 echo Close the "Computer Inspector server" window to stop.

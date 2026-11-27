@@ -8,7 +8,7 @@
 
 Only the Python standard library is used.
 """
-import hashlib, hmac, json, os, select, socket, ssl, struct, base64
+import hashlib, hmac, http.client, json, os, select, socket, ssl, struct, base64
 
 BUILD = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "build")
 
@@ -236,3 +236,38 @@ class Agent:
     def close(self):
         if self.ws:
             self.ws.close()
+
+# ---------- the dashboard's https api, logged in as the teacher ----------
+class Dashboard:
+    """Logs in with the teacher password (POST /login) and keeps the session cookie.
+    Every connection checks the certificate pin first, like the agents."""
+    def __init__(self, host, port, pin, password):
+        self.host, self.port, self.pin, self.cookie = host, port, pin, None
+        status, body = self._req("POST", "/login", {"password": password})
+        if status != 200:
+            raise Refused(f"Teacher login failed ({status}: {body.decode(errors='replace')})")
+
+    def _req(self, method, path, body=None):
+        c = http.client.HTTPSConnection(self.host, self.port, context=TLS, timeout=15)
+        try:
+            c.connect()
+            if not pin_matches(self.pin, c.sock.getpeercert(binary_form=True)):
+                raise Refused("The server's certificate does not match the pin (wrong pin, or not our server).")
+            headers = {"Content-Type": "application/json"} if body is not None else {}
+            if self.cookie:
+                headers["Cookie"] = self.cookie
+            c.request(method, path, json.dumps(body) if body is not None else None, headers)
+            r = c.getresponse()
+            data = r.read()
+            set_cookie = r.getheader("Set-Cookie")
+            if set_cookie:
+                self.cookie = set_cookie.split(";")[0]
+            return r.status, data
+        finally:
+            c.close()
+
+    def get_json(self, path):
+        status, data = self._req("GET", path)
+        if status != 200:
+            raise ConnectionError(f"GET {path}: {status}")
+        return json.loads(data)

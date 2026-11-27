@@ -87,6 +87,7 @@ add_executable(server
   common/exedir.cpp
   server/tlscert.cpp
   server/agentkeys.cpp
+  server/auth.cpp
   common/tlspin.cpp
   common/keys.cpp
   ${SERVER_PLATFORM}
@@ -164,6 +165,7 @@ if (SERVER_GUI)
     common/exedir.cpp
     server/tlscert.cpp
     server/agentkeys.cpp
+    server/auth.cpp
     common/tlspin.cpp
     common/keys.cpp
     ${SERVER_PLATFORM}

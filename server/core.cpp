@@ -11,6 +11,7 @@
 #include "common/exedir.hpp"
 #include "common/tlspin.hpp"
 #include "common/keys.hpp"
+#include <ixwebsocket/IXHttpServer.h>
 #include <ixwebsocket/IXSocketTLSOptions.h>
 using json=nlohmann::json;
 
@@ -185,6 +186,12 @@ bool core::start(std::string&err) {
     if (!tls_ok||!k->load(err)) {err="agent keys: "+(tls_ok?err:std::string("no random numbers")); log(lvl::err,err); return false;}
     keys_=std::move(k);
   }
+  if (!auth_) {
+    auto a=std::make_unique<auth>(exe_dir());
+    if (!a->load(err)) {err="teacher login: "+err; log(lvl::err,err); return false;}
+    auth_=std::move(a);
+  }
+  if (!auth_->has_password()) log(lvl::warn,"No teacher password yet: set it in the server window, with server --set-password, or in the dashboard on this computer");
   log(lvl::info,"Join key for new agents: "+keys_->join_key()+"  (agent --join-key ...; each pc then gets its own key)");
   if (!hist_) {
     hist_=std::make_unique<history>(hist);
@@ -221,25 +228,21 @@ bool core::start(std::string&err) {
   wsr_->setOnClientMessageCallback([this](std::shared_ptr<ix::ConnectionState> state,ix::WebSocket&ws,const ix::WebSocketMessagePtr&msg){
     switch (msg->type) {
       case ix::WebSocketMessageType::Open: {
-        bool d=msg->openInfo.uri=="/dashboard";
-        if (d) {std::lock_guard<std::mutex> lock(mu_); dash_.insert(&ws);}
-        else agent_open(ws);
-        log(lvl::info,std::string(d?"dashboard":"agent")+" connected: "+state->getRemoteIp());
+        // every connection on this port is an agent and must sign in (the dashboard uses https)
+        agent_open(ws);
+        log(lvl::info,"agent connected: "+state->getRemoteIp());
         break;
       }
       case ix::WebSocketMessageType::Close: {
-        bool d;
-        {std::lock_guard<std::mutex> lock(mu_); d=dash_.erase(&ws)>0; conns_.erase(&ws);}
-        log(lvl::info,std::string(d?"dashboard":"agent")+" disconnected: "+state->getRemoteIp());
+        {std::lock_guard<std::mutex> lock(mu_); conns_.erase(&ws);}
+        log(lvl::info,"agent disconnected: "+state->getRemoteIp());
         break;
       }
       case ix::WebSocketMessageType::Error:
         log(lvl::err,"An error has occur: "+msg->errorInfo.reason);
         break;
       case ix::WebSocketMessageType::Message: {
-        bool is_d;
-        {std::lock_guard<std::mutex> lock(mu_); is_d=dash_.count(&ws)>0;}
-        if (!is_d) agent_msg(ws,state->getRemoteIp(),msg->str);
+        agent_msg(ws,state->getRemoteIp(),msg->str);
         break;
       }
       default: break;
@@ -259,109 +262,7 @@ bool core::start(std::string&err) {
   http_->setTLSOptions(tlso);
   http_->setOnConnectionCallback(
     [this](ix::HttpRequestPtr rq,std::shared_ptr<ix::ConnectionState> state)->ix::HttpResponsePtr {
-      ix::WebSocketHttpHeaders head;
-      // the dashboard polls this once a second (same port and certificate as the page)
-      if (rq->uri=="/snapshot"&&rq->method=="GET") {
-        std::string body;
-        {std::lock_guard<std::mutex> lock(mu_); body=snap_;}
-        if (body.empty()) body=json{{"type","snapshot"},{"ts",now_ms()},{"machines",json::array()},{"removed",json::array()}}.dump();
-        head["Content-Type"]="application/json";
-        head["Cache-Control"]="no-store";
-        return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,body);
-      }
-      // can this browser manage computers (rename, describe, remove, add back)?
-      if (rq->uri=="/me"&&rq->method=="GET") {
-        head["Content-Type"]="application/json";
-        head["Cache-Control"]="no-store";
-        bool loc=is_local(state->getRemoteIp());
-        json me={{"local",loc}};
-        // the pin only for a browser on this computer: elsewhere the page itself could have
-        // come through someone in the middle, who would show their own pin
-        if (loc) {me["pin"]=pin(); me["join_key"]=join_key();}
-        return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,me.dump());
-      }
-      // managing computers from the dashboard. only from the server computer: the dashboard has
-      // no login, and a student must not be able to hide or rename their own pc
-      if ((rq->uri=="/forget"||rq->uri=="/restore"||rq->uri=="/meta"||rq->uri=="/revoke")&&rq->method=="POST") {
-        head["Content-Type"]="application/json";
-        head["Cache-Control"]="no-store";
-        auto reply=[&](int code,const char*msg,const json&body){
-          return std::make_shared<ix::HttpResponse>(code,msg,ix::HttpErrorCode::Ok,head,body.dump(-1,' ',false,json::error_handler_t::replace));
-        };
-        if (!is_local(state->getRemoteIp())) return reply(403,"Forbidden",{{"error","local only"}});
-        auto ct=rq->headers.find("Content-Type");
-        if (ct==rq->headers.end()||ct->second.rfind("application/json",0)!=0) return reply(415,"Unsupported Media Type",{{"error","needs application/json"}});
-        json j=json::parse(rq->body,nullptr,false);
-        if (j.is_discarded()||!j.is_object()||!j.contains("id")||!j["id"].is_string()) return reply(400,"Bad Request",{{"error","needs {\"id\": \"...\"}"}});
-        std::string id=j["id"].get<std::string>(), why;
-        if (rq->uri=="/forget") why=forget(id);
-        else if (rq->uri=="/restore") why=restore(id);
-        else if (rq->uri=="/revoke") why=revoke_key(id)?"":"unknown";
-        else {
-          auto str=[&](const char*k){return j.contains(k)&&j[k].is_string()?j[k].get<std::string>():std::string();};
-          why=set_meta(id,str("name"),str("desc"));
-        }
-        if (why=="unknown") return reply(404,"Not Found",{{"error","unknown id"}});
-        if (!why.empty()) return reply(400,"Bad Request",{{"error",why}});
-        return reply(200,"OK",{{"ok",true}});
-      }
-      // saving the seat map from the dashboard's editor. only from the server computer
-      // the dashboard has no login, so other pcs on the lan must not rewrite the room
-      // requiring application/json also makes a browser refuse cross-site posts (preflight)
-      if (rq->uri=="/layout.json"&&rq->method=="POST") {
-        head["Content-Type"]="application/json";
-        head["Cache-Control"]="no-store";
-        auto reply=[&](int code,const char*msg,const std::string&err){
-          return std::make_shared<ix::HttpResponse>(code,msg,ix::HttpErrorCode::Ok,head,json{{"error",err}}.dump(-1,' ',false,json::error_handler_t::replace));
-        };
-        if (!is_local(state->getRemoteIp())) return reply(403,"Forbidden","local only");
-        auto ct=rq->headers.find("Content-Type");
-        if (ct==rq->headers.end()||ct->second.rfind("application/json",0)!=0) return reply(415,"Unsupported Media Type","needs application/json");
-        if (rq->body.size()>256*1024) return reply(413,"Payload Too Large","too large");
-        json j=json::parse(rq->body,nullptr,false);
-        std::string why;
-        if (j.is_discarded()||!check_layout(j,why)) return reply(400,"Bad Request",why.empty()?"not JSON":why);
-        std::string lp=exe_dir()+"/layout.json", tmp=lp+".tmp";
-        {
-          std::ofstream f(tmp,std::ios::binary|std::ios::trunc);
-          f<<fmt_layout(j);
-          if (!f) return reply(500,"Internal Server Error","cannot write "+tmp);
-        }
-        if (!replace_file(tmp,lp)) return reply(500,"Internal Server Error","cannot replace "+lp);
-        log(lvl::info,"Seat map saved: "+lp);
-        return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,"{\"ok\":true}");
-      }
-      const std::string hp="/history?id=";
-      if (rq->uri.compare(0,hp.size(),hp)==0) {
-        std::string id;
-        // only ids the server has already seen; anything else is 404
-        if (url_dec(rq->uri.substr(hp.size()),id)&&hist_->has(id)) {
-          head["Content-Type"]="application/json";
-          head["Cache-Control"]="no-store";
-          return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,hist_->series(id).dump(-1,' ',false,json::error_handler_t::replace));
-        }
-      }
-      // seat map: only this exact path, read from the folder that holds the server executable
-      if (rq->uri=="/layout.json") {
-        std::string lp=exe_dir()+"/layout.json";
-        std::error_code ec;
-        auto sz=std::filesystem::file_size(lp,ec);
-        if (!ec&&sz>0&&sz<=256*1024) {
-          head["Content-Type"]="application/json";
-          head["Cache-Control"]="no-store";
-          return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,read_f(lp));
-        }
-      }
-      if (rq->uri=="/"||rq->uri=="/index.html") {
-        std::string by=read_f("dashboard/index.html");
-        if (!by.empty()) {
-          head["Content-Type"]="text/html; charset=utf-8";
-          return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,by);
-        }
-      }
-      std::string nf="Not Found";
-      head["Content-Type"]="text/html; charset=utf-8";
-      return std::make_shared<ix::HttpResponse>(404,"Not Found",ix::HttpErrorCode::Ok,head,nf);
+      return http(rq,state->getRemoteIp());
     }
   );
   auto hr=http_->listen();
@@ -413,7 +314,6 @@ void core::loop() {
       std::string pl=b_snp(snp,removed(),n,*hist_).dump(-1,' ',false,json::error_handler_t::replace);
       std::lock_guard<std::mutex> lock(mu_);
       snap_=pl;
-      for (const auto&c:wsr_->getClients()) if (dash_.count(c.get())) c->send(pl);
     } catch (const json::exception&e) {
       log(lvl::err,std::string("JSON EXCEPTION ERROR: ")+e.what());
     }
@@ -427,7 +327,6 @@ void core::stop() {
   if (th_.joinable()) th_.join();
   if (http_) {http_->stop(); http_.reset();}
   if (wsr_) {wsr_->stop(); wsr_.reset();}
-  {std::lock_guard<std::mutex> lock(mu_); dash_.clear();}
   log(lvl::info,"Server stopped");
 }
 
@@ -541,7 +440,7 @@ void core::agent_msg(ix::WebSocket&ws,const std::string&ip,const std::string&txt
     else if (type=="rekeyed") {
       bool ok=keys_->finish_rotation(c.id,c.nonce,str("sig"),now_ms());
       {std::lock_guard<std::mutex> lock(mu_); auto it=conns_.find(&ws); if (it!=conns_.end()) it->second.rekeying=false;}
-      if (ok) log(lvl::info,"Key rotated: "+c.id);
+      if (ok) {log(lvl::info,"Key rotated: "+c.id); if (auth_) auth_->audit(ip,"key of "+c.id+" rotated");}
       else log(lvl::warn,"Key rotation for "+c.id+" was not confirmed; the old key stays valid and it is tried again");
     }
     return;
@@ -556,6 +455,7 @@ void core::agent_msg(ix::WebSocket&ws,const std::string&ip,const std::string&txt
   // stops or joins again, and the tick thread closes connections still not signed in
   auto deny=[&](const std::string&why,const std::string&what){
     log(lvl::warn,what+" ("+ip+")");
+    if (auth_) auth_->audit(ip,"agent refused: "+what);
     ws.send(json{{"type","denied"},{"why",why}}.dump());
   };
   std::string id=str("id");
@@ -567,6 +467,7 @@ void core::agent_msg(ix::WebSocket&ws,const std::string&ip,const std::string&txt
       return deny("already_joined",id+" tried to join again. If it is the same pc (reinstalled), revoke its key on the dashboard first");
     if (v!=agent_keys::verdict::ok) return deny("bad_join_key",id+" tried to join with a wrong join key");
     log(lvl::info,id+" joined and got its own key");
+    if (auth_) auth_->audit(ip,"agent "+id+" joined");
   } else {
     auto v=keys_->auth(id,c.nonce,str("sig"));
     if (v==agent_keys::verdict::not_joined) return deny("not_joined",id+" is not joined (never joined, or its key was revoked)");
@@ -602,9 +503,18 @@ std::string core::new_join_key() {
   if (!keys_) return std::string();
   std::string k=keys_->new_join_key();
   log(lvl::info,"New join key: "+k+" (the old one no longer works for new pcs)");
+  if (auth_) auth_->audit("server","new join key made");
   return k;
 }
 bool core::joined(const std::string&id) const {return keys_&&keys_->joined(id);}
+
+bool core::has_password() const {return auth_&&auth_->has_password();}
+std::string core::set_password(const std::string&pw,const std::string&who) {
+  if (!auth_) return "not started";
+  std::string why=auth_->set_password(pw);
+  if (why.empty()) {auth_->audit(who,"teacher password set"); log(lvl::info,"Teacher password set");}
+  return why;
+}
 
 bool core::revoke_key(const std::string&id) {
   if (!keys_||!keys_->revoke(id)) return false;
@@ -618,6 +528,170 @@ bool core::revoke_key(const std::string&id) {
   for (auto&w:drop) w->close();
   log(lvl::info,"Key of "+id+" revoked; it must join again with the join key");
   return true;
+}
+
+// ---------- dashboard http (see README "Teacher login and audit log") ----------
+static std::string cookie_of(const ix::HttpRequestPtr&rq,const std::string&name) {
+  auto it=rq->headers.find("Cookie");
+  if (it==rq->headers.end()) return std::string();
+  const std::string&c=it->second;
+  for (size_t p=0;p<c.size();) {
+    size_t e=c.find(';',p);
+    std::string kv=c.substr(p,e==std::string::npos?std::string::npos:e-p);
+    while (!kv.empty()&&kv[0]==' ') kv.erase(0,1);
+    if (kv.rfind(name+"=",0)==0) return kv.substr(name.size()+1);
+    if (e==std::string::npos) break;
+    p=e+1;
+  }
+  return std::string();
+}
+
+ix::HttpResponsePtr core::http(ix::HttpRequestPtr rq,const std::string&ip) {
+  ix::WebSocketHttpHeaders head;
+  // the page may not be framed by other sites, and the browser must not guess types
+  head["X-Frame-Options"]="DENY";
+  head["X-Content-Type-Options"]="nosniff";
+  head["Referrer-Policy"]="no-referrer";
+  head["Cache-Control"]="no-store";
+  auto reply=[&](int code,const char*msg,const json&body){
+    head["Content-Type"]="application/json";
+    return std::make_shared<ix::HttpResponse>(code,msg,ix::HttpErrorCode::Ok,head,body.dump(-1,' ',false,json::error_handler_t::replace));
+  };
+  const std::string ck="ci_session";
+  auto set_cookie=[&](const std::string&t){
+    head["Set-Cookie"]=ck+"="+t+"; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age="+(t.empty()?"0":std::to_string(auth::MAX_MS/1000));
+  };
+  const std::string&u=rq->uri;
+  const bool post=rq->method=="POST";
+  int64_t now=now_ms();
+  std::string token=cookie_of(rq,ck);
+  bool in=auth_->session(token,now);
+
+  // ---- open to everyone: the page, who am i, first set-up, login ----
+  if (!post&&(u=="/"||u=="/index.html")) {
+    std::string by=read_f("dashboard/index.html");
+    if (by.empty()) return reply(404,"Not Found",{{"error","dashboard/index.html not found (run the server from the project folder)"}});
+    head["Content-Type"]="text/html; charset=utf-8";
+    return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,by);
+  }
+  if (!post&&u=="/me") {
+    json me={{"local",is_local(ip)},{"logged_in",in},{"setup_needed",!auth_->has_password()}};
+    if (in) {me["pin"]=pin(); me["join_key"]=join_key();}
+    return reply(200,"OK",me);
+  }
+  json j;
+  if (post) {
+    // a json body only: a browser will not send that cross-site without asking first (cors)
+    auto ct=rq->headers.find("Content-Type");
+    if (ct==rq->headers.end()||ct->second.rfind("application/json",0)!=0) return reply(415,"Unsupported Media Type",{{"error","needs application/json"}});
+    if (rq->body.size()>256*1024) return reply(413,"Payload Too Large",{{"error","too large"}});
+    j=json::parse(rq->body,nullptr,false);
+    if (j.is_discarded()||!j.is_object()) return reply(400,"Bad Request",{{"error","not a JSON object"}});
+  }
+  auto str=[&](const char*k){return j.contains(k)&&j[k].is_string()?j[k].get<std::string>():std::string();};
+  if (post&&u=="/setup") {
+    // the very first password: only from the server computer itself
+    if (auth_->has_password()) return reply(409,"Conflict",{{"error","already set"}});
+    if (!is_local(ip)) return reply(403,"Forbidden",{{"error","local only"}});
+    std::string why=auth_->set_password(str("password"));
+    if (!why.empty()) return reply(400,"Bad Request",{{"error",why}});
+    auth_->audit(ip,"teacher password set (first time, dashboard)");
+    log(lvl::info,"Teacher password set");
+    set_cookie(auth_->new_session());
+    return reply(200,"OK",{{"ok",true}});
+  }
+  if (post&&u=="/login") {
+    if (!auth_->has_password()) return reply(409,"Conflict",{{"error","setup"}});
+    std::string why; int retry=0;
+    std::string t=auth_->login(ip,str("password"),why,retry);
+    if (t.empty()) {
+      if (why=="locked") {
+        if (retry>0&&str("password").size()) auth_->audit(ip,"login refused: locked out for "+std::to_string(retry)+" s");
+        return reply(429,"Too Many Requests",{{"error","locked"},{"retry_s",retry}});
+      }
+      auth_->audit(ip,"login failed (wrong password)");
+      log(lvl::warn,"Dashboard login failed from "+ip);
+      return reply(401,"Unauthorized",{{"error","wrong"}});
+    }
+    auth_->audit(ip,"login");
+    set_cookie(t);
+    return reply(200,"OK",{{"ok",true}});
+  }
+
+  // ---- everything below needs a teacher session ----
+  if (!in) return reply(401,"Unauthorized",{{"error","login"}});
+
+  if (post&&u=="/logout") {
+    auth_->logout(token);
+    auth_->audit(ip,"logout");
+    set_cookie("");
+    return reply(200,"OK",{{"ok",true}});
+  }
+  if (post&&u=="/password") {
+    if (!auth_->check_password(str("old"))) {auth_->audit(ip,"password change refused (wrong current password)"); return reply(403,"Forbidden",{{"error","wrong"}});}
+    std::string why=auth_->set_password(str("new"));
+    if (!why.empty()) return reply(400,"Bad Request",{{"error",why}});
+    auth_->logout_others(token);
+    auth_->audit(ip,"teacher password changed (other sessions logged out)");
+    log(lvl::info,"Teacher password changed");
+    return reply(200,"OK",{{"ok",true}});
+  }
+  if (post&&(u=="/forget"||u=="/restore"||u=="/meta"||u=="/revoke")) {
+    std::string id=str("id"), why;
+    if (id.empty()) return reply(400,"Bad Request",{{"error","needs {\"id\": \"...\"}"}});
+    if (u=="/forget") why=forget(id);
+    else if (u=="/restore") why=restore(id);
+    else if (u=="/revoke") why=revoke_key(id)?"":"unknown";
+    else why=set_meta(id,str("name"),str("desc"));
+    if (why=="unknown") return reply(404,"Not Found",{{"error","unknown id"}});
+    if (!why.empty()) return reply(400,"Bad Request",{{"error",why}});
+    if (u=="/forget") auth_->audit(ip,"removed "+id+" from the dashboard");
+    else if (u=="/restore") auth_->audit(ip,"added "+id+" back");
+    else if (u=="/revoke") auth_->audit(ip,"revoked the key of "+id);
+    else auth_->audit(ip,"renamed "+id+" to \""+str("name")+"\", description \""+str("desc")+"\"");
+    return reply(200,"OK",{{"ok",true}});
+  }
+  if (post&&u=="/layout.json") {
+    std::string why;
+    if (!check_layout(j,why)) return reply(400,"Bad Request",{{"error",why}});
+    std::string lp=exe_dir()+"/layout.json", tmp=lp+".tmp";
+    {
+      std::ofstream f(tmp,std::ios::binary|std::ios::trunc);
+      f<<fmt_layout(j);
+      if (!f) return reply(500,"Internal Server Error",{{"error","cannot write "+tmp}});
+    }
+    if (!replace_file(tmp,lp)) return reply(500,"Internal Server Error",{{"error","cannot replace "+lp}});
+    log(lvl::info,"Seat map saved: "+lp);
+    auth_->audit(ip,"seat map saved");
+    return reply(200,"OK",{{"ok",true}});
+  }
+  if (!post&&u=="/snapshot") {
+    // the dashboard polls this once a second (same port and certificate as the page)
+    std::string body;
+    {std::lock_guard<std::mutex> lock(mu_); body=snap_;}
+    if (body.empty()) body=json{{"type","snapshot"},{"ts",now},{"machines",json::array()},{"removed",json::array()}}.dump();
+    head["Content-Type"]="application/json";
+    return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,body);
+  }
+  const std::string hp="/history?id=";
+  if (!post&&u.compare(0,hp.size(),hp)==0) {
+    std::string id;
+    // only ids the server has already seen; anything else is 404
+    if (url_dec(u.substr(hp.size()),id)&&hist_->has(id))
+      return reply(200,"OK",hist_->series(id));
+    return reply(404,"Not Found",{{"error","unknown id"}});
+  }
+  if (!post&&u=="/layout.json") {
+    // seat map: only this exact path, read from the folder that holds the server executable
+    std::string lp=exe_dir()+"/layout.json";
+    std::error_code ec;
+    auto sz=std::filesystem::file_size(lp,ec);
+    if (!ec&&sz>0&&sz<=256*1024) {
+      head["Content-Type"]="application/json";
+      return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,read_f(lp));
+    }
+  }
+  return reply(404,"Not Found",{{"error","not found"}});
 }
 
 std::string core::pin() const {std::lock_guard<std::mutex> lock(mu_); return tls_.fp.empty()?std::string():fp_pin(tls_.fp);}
@@ -635,13 +709,14 @@ std::vector<mah> core::machines() const {
   return v;
 }
 
-int core::dash_count() const {std::lock_guard<std::mutex> lock(mu_); return (int)dash_.size();}
+// dashboards: teacher sessions that asked for data in the last 5 s
+int core::dash_count() const {return auth_?auth_->active(now_ms(),5000):0;}
 
 int core::agent_count() const {
   if (!run_||!wsr_) return 0;
   std::lock_guard<std::mutex> lock(mu_);
   int n=0;
-  for (const auto&c:wsr_->getClients()) if (!dash_.count(c.get())) n++;
+  for (const auto&c:wsr_->getClients()) {auto it=conns_.find(c.get()); if (it!=conns_.end()&&it->second.authed) n++;}
   return n;
 }
 

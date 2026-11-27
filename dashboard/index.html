@@ -374,6 +374,24 @@
     .ask .small { margin-top: 4px; }
     .ask .err { color: var(--crit); font-weight: 600; font-size: 14px; margin: 10px 0 0; min-height: 0; }
     .ask .acts .grow { flex: 1; }
+    .ask input[type="password"], .gate input[type="password"] {
+      width: 100%;
+      min-height: 44px;
+      padding: 8px 12px;
+      border: 1px solid var(--off-line);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+    }
+    .ask .ok { color: var(--ok); font-weight: 600; font-size: 14px; margin: 10px 0 0; }
+    /* set-up / login before the dashboard */
+    .gate { max-width: 440px; margin: 8vh auto 0; }
+    .gate .panel { padding: 24px 24px 20px; }
+    .gate h2 { font-size: 20px; margin: 0 0 6px; }
+    .gate label { display: block; font-size: 14px; font-weight: 600; margin: 16px 0 4px; }
+    .gate .err { color: var(--crit); font-weight: 600; font-size: 14px; margin: 12px 0 0; min-height: 1.5em; }
+    .gate .btn.primary { width: 100%; margin-top: 8px; }
     .room.ed .cell { border: 1px dashed var(--off-line); border-radius: 10px; }
     .blk {
       position: relative;
@@ -450,9 +468,29 @@
       </div>
       <button type="button" class="btn ico" id="lang"></button>
       <button type="button" class="btn ico sq" id="theme"></button>
+      <button type="button" class="btn ico sq" id="acct" hidden></button>
     </div>
   </header>
   <main>
+    <!-- before the dashboard: first set-up, or login -->
+    <section class="gate" id="gate" hidden>
+      <form class="panel" id="gform" novalidate>
+        <h2 id="gtitle"></h2>
+        <p class="small" id="ghint"></p>
+        <div id="gfields">
+          <input type="text" name="username" value="teacher" autocomplete="username" hidden>
+          <label for="gpw" id="gpwl"></label>
+          <input type="password" id="gpw" maxlength="256">
+          <div id="gpw2box">
+            <label for="gpw2" id="gpw2l"></label>
+            <input type="password" id="gpw2" maxlength="256" autocomplete="new-password">
+          </div>
+          <p class="err" id="gerr" role="alert"></p>
+          <button type="submit" class="btn primary" id="gbtn"></button>
+        </div>
+      </form>
+    </section>
+    <div id="app">
     <section class="strip" aria-live="polite">
       <div class="conn"><span class="dot wait" id="conndot"></span><span id="conntext"></span></div>
       <div id="counts" style="display:contents"></div>
@@ -474,6 +512,26 @@
     <div id="map" hidden></div>
     <section id="removed" hidden></section>
     <div id="ed" hidden></div>
+    </div>
+    <dialog class="ask" id="adlg" aria-labelledby="aq">
+      <form id="aform" novalidate>
+        <h2 id="aq"></h2>
+        <input type="text" name="username" value="teacher" autocomplete="username" hidden>
+        <label for="apw0" id="apw0l"></label>
+        <input type="password" id="apw0" maxlength="256" autocomplete="current-password">
+        <label for="apw1" id="apw1l"></label>
+        <input type="password" id="apw1" maxlength="256" autocomplete="new-password">
+        <label for="apw2" id="apw2l"></label>
+        <input type="password" id="apw2" maxlength="256" autocomplete="new-password">
+        <p class="err" id="aerr" role="alert"></p>
+        <div class="acts">
+          <button type="button" class="btn danger" id="aout"></button>
+          <span class="grow"></span>
+          <button type="button" class="btn" id="aclose"></button>
+          <button type="submit" class="btn primary" id="achg"></button>
+        </div>
+      </form>
+    </dialog>
     <dialog class="ask" id="mdlg" aria-labelledby="mq">
       <form id="mform" novalidate>
         <h2 id="mq"></h2>
@@ -523,6 +581,16 @@
       rvBody: "เครื่องนี้จะถูกตัดการเชื่อมต่อทันที และต้องเข้าร่วมใหม่ด้วยคีย์สำหรับเข้าร่วม (agent --join-key …) ใช้เมื่อเครื่องถูกติดตั้งใหม่ หรือคีย์ของเครื่องอาจรั่วไหล",
       rvYes: "ยกเลิกคีย์", rvDone: id => `ยกเลิกคีย์ของ ${id} แล้ว เครื่องนี้ต้องเข้าร่วมใหม่ด้วยคีย์สำหรับเข้าร่วม`,
       rvFail: id => `ยกเลิกคีย์ของ ${id} ไม่สำเร็จ (เครื่องนี้อาจยังไม่ได้เข้าร่วม)`,
+      setupTitle: "ตั้งรหัสผ่านครู", setupHint: "ทำครั้งแรกครั้งเดียว รหัสผ่านนี้ใช้เข้าแดชบอร์ดจากเครื่องใดก็ได้ อย่างน้อย 8 ตัวอักษร",
+      setupRemote: "ยังไม่ได้ตั้งรหัสผ่านครู ตั้งได้ที่เครื่องที่รัน server: ในหน้าต่าง server หรือเปิดหน้านี้บนเครื่องนั้น",
+      pw: "รหัสผ่าน", pw2: "พิมพ์รหัสผ่านอีกครั้ง", setPw: "ตั้งรหัสผ่าน",
+      loginTitle: "เข้าสู่ระบบครู", loginHint: "ข้อมูลของเครื่องนักเรียนแสดงหลังเข้าสู่ระบบเท่านั้น", loginBtn: "เข้าสู่ระบบ",
+      checking: "กำลังตรวจสอบ...", errWrong: "รหัสผ่านไม่ถูกต้อง", errLocked: n => `ลองผิดหลายครั้ง รออีก ${n} วินาที`,
+      errShort: "อย่างน้อย 8 ตัวอักษร", errSame: "รหัสผ่านสองช่องไม่ตรงกัน", errNet: "ติดต่อเซิร์ฟเวอร์ไม่ได้",
+      expired: "หมดเวลาการเข้าสู่ระบบ กรุณาเข้าสู่ระบบอีกครั้ง",
+      acct: "บัญชีครู", chgTitle: "เปลี่ยนรหัสผ่านครู", pwOld: "รหัสผ่านปัจจุบัน", pwNew: "รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร)",
+      chgBtn: "เปลี่ยนรหัสผ่าน", chgDone: "เปลี่ยนรหัสผ่านแล้ว เบราว์เซอร์อื่นที่เข้าสู่ระบบไว้ต้องเข้าสู่ระบบใหม่",
+      errOld: "รหัสผ่านปัจจุบันไม่ถูกต้อง", logout: "ออกจากระบบ",
       rmBody: "เครื่องนี้จะถูกซ่อน และเซิร์ฟเวอร์จะไม่รับข้อมูลจากเครื่องนี้จนกว่าจะกด เพิ่มกลับ ใน แสดงเครื่องที่เอาออก ด้านล่างของหน้านี้ ประวัติของเครื่องยังเก็บไว้",
       rmYes: "เอาออก", rmNo: "ยกเลิก",
       rmDone: id => `เอา ${id} ออกแล้ว เพิ่มกลับได้ด้วยปุ่ม เพิ่มกลับ ตรงนี้ หรือใน แสดงเครื่องที่เอาออก ด้านล่างของหน้า`,
@@ -578,6 +646,16 @@
       rvBody: "It is disconnected now and must join again with the join key (agent --join-key …). Use this when the PC was reinstalled, or its key may have leaked.",
       rvYes: "Revoke key", rvDone: id => `${id}'s key was revoked. It must join again with the join key.`,
       rvFail: id => `Could not revoke ${id}'s key (it may not have joined)`,
+      setupTitle: "Set the teacher password", setupHint: "First time only. This password opens the dashboard from any PC. At least 8 characters.",
+      setupRemote: "No teacher password yet. Set it on the server computer: in the server window, or by opening this page there.",
+      pw: "Password", pw2: "Type it again", setPw: "Set password",
+      loginTitle: "Teacher login", loginHint: "Student PCs are only shown after logging in.", loginBtn: "Log in",
+      checking: "Checking...", errWrong: "Wrong password", errLocked: n => `Too many wrong tries. Wait ${n} s.`,
+      errShort: "At least 8 characters", errSame: "The two passwords are not the same", errNet: "Cannot reach the server",
+      expired: "Your session ended. Please log in again.",
+      acct: "Teacher account", chgTitle: "Change the teacher password", pwOld: "Current password", pwNew: "New password (at least 8 characters)",
+      chgBtn: "Change password", chgDone: "Password changed. Other logged-in browsers must log in again.",
+      errOld: "The current password is wrong", logout: "Log out",
       rmBody: "It is hidden, and the server ignores its data, until you press Add back under Show removed computers at the bottom of this page. Its history is kept.",
       rmYes: "Remove", rmNo: "Cancel",
       rmDone: id => `${id} was removed. To add it back, press Add back here, or under Show removed computers at the bottom of the page.`,
@@ -622,6 +700,7 @@
   // simple stroke icons drawn for this page (24x24 grid)
   const ICON = {
     globe: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>`,
+    user: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>`,
     moon: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>`,
     pencil: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>`,
     sun: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>`,
@@ -643,8 +722,12 @@
   let layoutNote = null;        // key of the note to show about layout.json
   let mapMsg = null;            // short "saved" message next to the edit button
   let notice = null;            // {key, id, bad, act} shown under the status strip after remove / add back
-  let joinKey = "";             // join key, same rule as the pin
-  let pin = "";                 // agent pin, only told to a browser on the server computer
+  let authState = "unknown";    // unknown | setup | login | in (from GET /me)
+  let isLocal = false;          // this browser is on the server computer (first set-up only)
+  let gateErr = "";             // message under the set-up / login form
+  let polling = false;
+  let joinKey = "";             // join key, for a logged-in teacher
+  let pin = "";                 // agent pin, for a logged-in teacher
   let can = false;              // this browser may manage computers (it is on the server computer)
   const nm = m => m.name || m.id;
   const t = () => TXT[lang];
@@ -1198,7 +1281,7 @@
       j = await r.json().catch(() => null);
     } catch (e) { if (ed) edSay("saveFail", true); return; }
     if (!ed) return;
-    if (r.status === 403) return edSay("saveLocal", true);
+    if (r.status === 401) return edSay("expired", true);   // logged out meanwhile: log in again, then save
     // an older server answers any request to /layout.json with the file, so look for {"ok":true}
     if (!r.ok || !j || j.ok !== true) return edSay("saveFail", true, j && j.error ? j.error : "HTTP " + r.status);
     layout = checkLayout(out);
@@ -1367,6 +1450,28 @@
     $("theme").innerHTML = theme === "dark" ? ICON.sun : ICON.moon;
     $("theme").setAttribute("aria-label", tl);
     $("theme").title = tl;
+    // before the dashboard: set-up or login
+    const gated = authState !== "in";
+    $("gate").hidden = !gated || authState === "unknown";
+    $("app").hidden = gated;
+    $("acct").hidden = gated;
+    $("acct").innerHTML = ICON.user;
+    $("acct").setAttribute("aria-label", T.acct);
+    $("acct").title = T.acct;
+    if (gated) {
+      const setup = authState === "setup";
+      $("gtitle").textContent = setup ? T.setupTitle : T.loginTitle;
+      $("ghint").textContent = setup ? (isLocal ? T.setupHint : T.setupRemote) : T.loginHint;
+      $("gfields").hidden = setup && !isLocal;
+      $("gpw2box").hidden = !setup;
+      $("gpw").autocomplete = setup ? "new-password" : "current-password";
+      $("gpwl").textContent = T.pw;
+      $("gpw2l").textContent = T.pw2;
+      if (!$("gbtn").disabled) $("gbtn").textContent = setup ? T.setPw : T.loginBtn;
+      $("gerr").textContent = gateErr ? (typeof gateErr === "function" ? gateErr(T) : T[gateErr]) : "";
+      $("views").hidden = true;
+      return;
+    }
     $("views").hidden = !!ed;
     for (const b of document.querySelectorAll("#views button")) b.setAttribute("aria-pressed", String(b.dataset.v === view));
     $("lnote").hidden = !layoutNote || !!ed;
@@ -1466,26 +1571,109 @@
   // the newest snapshot, once a second, over the same https connection as this page
   // (a separate wss:// port would need its own certificate exception in the browser)
   function connect() {
+    if (!polling) return;
     fetch("/snapshot", { cache: "no-store" })
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(r => {
+        if (r.status === 401) {               // session ended: back to the login form
+          polling = false; authState = "login"; can = false; gateErr = "expired"; lastDt = null;
+          throw new Error("login");
+        }
+        if (!r.ok) throw new Error(r.status);
+        return r.json();
+      })
       .then(dt => {
         if (!dt || !Array.isArray(dt.machines)) throw new Error("bad snapshot");
         dt.machines.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
         lastDt = dt;
         conn = "connected";
       })
-      .catch(() => { if (conn !== "connecting" || lastDt) conn = "lost"; })
-      .finally(() => { render(); setTimeout(connect, 1000); });
+      .catch(e => { if (e.message !== "login" && (conn !== "connecting" || lastDt)) conn = "lost"; })
+      .finally(() => { render(); if (polling) setTimeout(connect, 1000); else if (authState === "login") $("gpw").focus(); });
   }
-  render();
-  loadLayout();
-  connect();
-  fetch("/me", { cache: "no-store" }).then(r => r.json()).then(j => {
-    can = j && j.local === true;
-    pin = j && typeof j.pin === "string" ? j.pin : "";
-    joinKey = j && typeof j.join_key === "string" ? j.join_key : "";
+  function startPolling() {
+    if (polling) return;
+    polling = true;
+    conn = "connecting";
+    loadLayout();
+    connect();
+  }
+  // who am i: set-up needed, logged in, on the server computer?
+  async function refreshMe() {
+    let j = null;
+    try { j = await fetch("/me", { cache: "no-store" }).then(r => r.json()); } catch (e) {}
+    if (j) {
+      isLocal = j.local === true;
+      can = j.logged_in === true;
+      pin = typeof j.pin === "string" ? j.pin : "";
+      joinKey = typeof j.join_key === "string" ? j.join_key : "";
+      authState = j.setup_needed ? "setup" : j.logged_in ? "in" : "login";
+    } else if (authState === "unknown") {
+      authState = "login"; gateErr = "errNet";
+    }
     render();
-  }).catch(() => {});
+    if (authState === "in") startPolling();
+    else if (!$("gfields").hidden) $("gpw").focus();
+  }
+  $("gform").addEventListener("submit", async e => {
+    e.preventDefault();
+    const setup = authState === "setup", pw = $("gpw").value;
+    if (setup && pw.length < 8) { gateErr = "errShort"; render(); return; }
+    if (setup && pw !== $("gpw2").value) { gateErr = "errSame"; render(); return; }
+    $("gbtn").disabled = true;
+    $("gbtn").textContent = t().checking;         // the server checks slowly on purpose
+    let r = null, j = null;
+    try {
+      r = await fetch(setup ? "/setup" : "/login", { method: "POST", headers: { "Content-Type": "application/json" },
+                                                     body: JSON.stringify({ password: pw }), cache: "no-store" });
+      j = await r.json().catch(() => null);
+    } catch (err) {}
+    $("gbtn").disabled = false;
+    if (r && r.ok) {
+      $("gpw").value = ""; $("gpw2").value = ""; gateErr = "";
+      await refreshMe();
+      return;
+    }
+    $("gpw").value = "";
+    gateErr = !r ? "errNet" : r.status === 429 && j ? (T => T.errLocked(j.retry_s)) : r.status === 401 ? "errWrong"
+            : j && j.error === "too short" ? "errShort" : r.status === 409 ? "" : "errNet";
+    if (r && r.status === 409) { await refreshMe(); return; }   // set up elsewhere meanwhile
+    render();
+    $("gpw").focus();
+  });
+  // account pop-up: change the password, or log out
+  function openAcct() {
+    const T = t();
+    $("aq").textContent = T.chgTitle;
+    $("apw0l").textContent = T.pwOld; $("apw1l").textContent = T.pwNew; $("apw2l").textContent = T.pw2;
+    $("aout").textContent = T.logout; $("aclose").textContent = T.close; $("achg").textContent = T.chgBtn;
+    for (const id of ["apw0", "apw1", "apw2"]) $(id).value = "";
+    $("aerr").textContent = ""; $("aerr").className = "err";
+    $("adlg").showModal();
+    $("apw0").focus();
+  }
+  function closeAcct() { if ($("adlg").open) $("adlg").close(); $("acct").focus(); }
+  $("acct").addEventListener("click", openAcct);
+  $("aclose").addEventListener("click", closeAcct);
+  $("adlg").addEventListener("cancel", e => { e.preventDefault(); closeAcct(); });
+  $("aform").addEventListener("submit", async e => {
+    e.preventDefault();
+    const T = t(), say = (m, ok) => { $("aerr").textContent = m; $("aerr").className = ok ? "ok" : "err"; };
+    if ($("apw1").value.length < 8) return say(T.errShort);
+    if ($("apw1").value !== $("apw2").value) return say(T.errSame);
+    $("achg").disabled = true; say(T.checking, true);
+    const r = await post("/password", { old: $("apw0").value, new: $("apw1").value });
+    $("achg").disabled = false;
+    if (r.ok) { for (const id of ["apw0", "apw1", "apw2"]) $(id).value = ""; say(T.chgDone, true); }
+    else say(r.status === 403 ? T.errOld : r.status === 401 ? T.expired : r.error === "too short" ? T.errShort : T.errNet);
+  });
+  $("aout").addEventListener("click", async () => {
+    await post("/logout", {});
+    if ($("adlg").open) $("adlg").close();
+    polling = false; lastDt = null; can = false; pin = ""; joinKey = ""; gateErr = "";
+    await refreshMe();
+  });
+  render();
+  refreshMe();
   </script>
 </body>
 </html>

@@ -14,6 +14,8 @@
 #include "history.hpp"
 #include "tlscert.hpp"
 #include "agentkeys.hpp"
+#include "auth.hpp"
+#include <ixwebsocket/IXHttp.h>
 
 namespace ix { class WebSocketServer; class HttpServer; class WebSocket; }
 
@@ -80,6 +82,11 @@ public:
   bool revoke_key(const std::string&id);
   bool joined(const std::string&id) const;
 
+  // teacher login (false / "not started" before the first start())
+  bool has_password() const;
+  // "" when set; else why ("too short", ...). who: for the audit log
+  std::string set_password(const std::string&pw,const std::string&who);
+
 private:
   void log(lvl l,const std::string&s);
   void hmsg(const std::string&ip,const std::string&id,const std::string&txt);
@@ -91,11 +98,12 @@ private:
   struct conn {std::string nonce,id; bool authed=false,rekeying=false; int64_t opened=0; int tries=0;};
   std::map<const void*,conn> conns_;  // agent connections, guarded by mu_
   std::unique_ptr<agent_keys> keys_;  // agents.json; has its own lock
+  std::unique_ptr<auth> auth_;        // auth.json, sessions, audit.log; has its own lock
+  ix::HttpResponsePtr http(ix::HttpRequestPtr rq,const std::string&ip);
   void loop();
 
   mutable std::mutex mu_;
   std::map<std::string,mah> mah_;
-  std::unordered_set<const void*> dash_;
   netif net_;
   std::unique_ptr<ix::WebSocketServer> wsr_;
   std::unique_ptr<ix::HttpServer> http_;

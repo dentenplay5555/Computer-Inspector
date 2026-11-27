@@ -3,6 +3,7 @@
 #define GL_SILENCE_DEPRECATION
 #include <algorithm>
 #include <cfloat>
+#include <cstring>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -250,6 +251,32 @@ static void draw_connect(app&a,const pal&p) {
     std::string dash="https://"+ip+":"+std::to_string(a.srv.http_port);
     float avail=ImGui::GetContentRegionAvail().x;
     bool two=avail>760*a.scale;
+    // the teacher password, until it is set (it can also be set in the dashboard on this pc,
+    // or with server --set-password)
+    static char pw1[257],pw2[257];
+    static int pw_msg=-1;                      // string id of the last message, or -1
+    if (!a.srv.has_password()) {
+      ImGui::Spacing();
+      ImGui::TextColored(p.warn,"%s",T(a,S_PW_NOT_SET));
+      float fw=200*a.scale;
+      ImGui::SetNextItemWidth(fw);
+      ImGui::InputTextWithHint("###pw1",T(a,S_PW_NEW),pw1,sizeof pw1,ImGuiInputTextFlags_Password);
+      ImGui::SameLine();
+      ImGui::SetNextItemWidth(fw);
+      bool enter=ImGui::InputTextWithHint("###pw2",T(a,S_PW_AGAIN),pw2,sizeof pw2,ImGuiInputTextFlags_Password|ImGuiInputTextFlags_EnterReturnsTrue);
+      ImGui::SameLine();
+      if (primary_button(p,(std::string(T(a,S_PW_SET))+"###pwset").c_str())||enter) {
+        std::string s1(pw1),s2(pw2);
+        if (s1.size()<8) pw_msg=S_PW_SHORT;
+        else if (s1!=s2) pw_msg=S_PW_SAME;
+        else pw_msg=a.srv.set_password(s1,"server window").empty()?S_PW_DONE:S_PW_SHORT;
+        std::memset(pw1,0,sizeof pw1); std::memset(pw2,0,sizeof pw2);   // do not keep it around
+      }
+      if (pw_msg>=0&&pw_msg!=S_PW_DONE) ImGui::TextColored(p.crit,"%s",T(a,(sid)pw_msg));
+      ImGui::Spacing();
+    } else if (pw_msg==S_PW_DONE) {
+      ImGui::TextColored(p.ok,"%s",T(a,S_PW_DONE));
+    }
     // join key: copy, or replace with a new one (asked first)
     static bool ask_new_join=false;
     auto join_row=[&]{

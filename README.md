@@ -139,7 +139,10 @@ reads the pin from the certificate (`run.sh --agent` and `run.bat --agent` do th
 
 The browser warns the first time, because the certificate is the server's own and not from
 a public authority: accept it once per browser, or install `server.crt` as trusted on the
-teacher PCs. The dashboard only talks to port 8081, so it is one exception.
+teacher PCs. The dashboard only talks to port 8081, so it is one exception. (While a
+browser only has the exception and not the trust, it opens and drops an extra connection
+each second; the console server prints a "tls accept failed" line for it. Harmless, and
+it stops once `server.crt` is trusted.)
 
 ## Joining and keys
 
@@ -166,15 +169,37 @@ Only PCs that joined may send data. The server keeps who may join and each PC's 
    cut), either key still works and the rotation finishes on the next connection. A PC that
    was off for a week rotates as soon as it is back. `server --rotate-hours N` changes the
    interval (`0` = never).
-4. **Revoking.** **Revoke key** in a computer's edit pop-up on the dashboard (server PC
-   only, for now) disconnects it and forgets its key; it must join again with the join
-   key. Use it when a PC is reinstalled or its key may have leaked.
+4. **Revoking.** **Revoke key** in a computer's edit pop-up on the dashboard (teacher
+   login) disconnects it and forgets its key; it must join again with the join key. Use
+   it when a PC is reinstalled or its key may have leaked.
 
 The join key alone cannot take over a PC that already joined: a second join with the same
 ID is refused until that ID's key is revoked. The agent stops with a clear message (exit
 code 3) when the server refuses it for good: wrong join key, ID already joined, key revoked.
 On the server PC, `--join-key-file build/agents.json` reads the join key from the server's
 file (`run.sh --agent` and `run.bat --agent` do this, like `--pin-file`).
+
+## Teacher login and audit log
+
+The dashboard only shows student PCs after logging in with the teacher password.
+
+- **First time:** set the password in the server window, with `server --set-password`
+  (typing is hidden), or in the dashboard opened on the server PC itself. Until then the
+  dashboard on other PCs says to do that. At least 8 characters.
+- The password is stored only as a salted PBKDF2-SHA256 hash (600,000 rounds) in
+  `auth.json` next to the server (owner-only on Mac / Linux). Checking it takes a moment on
+  purpose. `server --set-password` replaces it (restart a running server afterwards).
+- **Sessions:** a random cookie (`HttpOnly`, `Secure`, `SameSite=Strict`), ended by
+  **Log out**, 30 minutes without use, 12 hours in all, or a server restart. The person
+  icon in the header changes the password, which logs out every other browser.
+- **Wrong passwords:** 5 from one address lock it out for 1 minute, then 2, 4, ... up to 15.
+- **What needs the login:** everything except the page itself and `GET /me`: the data
+  (`/snapshot`, `/history`, `/layout.json`), renaming, removing, revoking, saving the seat
+  map. Requests that change something must be JSON, which other websites cannot send in
+  the teacher's name.
+- **Audit log:** `audit.log` next to the server gets one line per event, with the time and
+  address: logins (and failed ones), log outs, password changes, renames, removals, revokes,
+  seat-map saves, new join keys, and agents that joined, rotated their key or were refused.
 
 ## History and abnormal usage
 
@@ -224,10 +249,8 @@ On the server computer, every card has an edit button (pencil) that opens:
 Names, descriptions and removed computers are saved in `machines.json` next to the server
 executable, so they survive a restart.
 
-These changes only work in a browser on the server computer itself (`localhost` or its own
-LAN address): the dashboard has no login, and a student must not be able to hide or rename
-their own PC. Other PCs see the names and descriptions but no edit buttons. The dashboard
-uses `GET /me` and `POST /meta`, `/forget`, `/restore` with `{"id": "..."}`.
+All of this needs the teacher login (see below). The dashboard uses `GET /me` and
+`POST /meta`, `/forget`, `/restore`, `/revoke` with `{"id": "..."}`.
 
 ## Seat map
 
@@ -251,9 +274,8 @@ Drag a block to move it, or select it and click the cell it should go to. With t
 keyboard: arrows move the selected block, Shift+arrows resize a label, Delete
 removes it. Columns and Rows change the size of the room. Blocks never overlap.
 
-**Save** writes `layout.json` next to the server. To stop other PCs on the LAN from
-changing the room, saving only works in a browser on the server computer itself. On any
-other PC, use **Download file** and copy the file there. `run.sh` / `run.bat` copy a
+**Save** writes `layout.json` next to the server (teacher login). **Download file** gives
+the same file to copy by hand. `run.sh` / `run.bat` copy a
 `./layout.json` from the repository root only when it is newer, so a saved map is kept.
 
 ### File format
