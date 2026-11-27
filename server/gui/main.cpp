@@ -1,5 +1,5 @@
-// Native window for the Computer Inspector server (Dear ImGui + GLFW + OpenGL 3).
-// Runs the same core as the console server and shows its state live.
+// native window for the computer inspector server (dear imgui + glfw + opengl 3)
+// runs the same core as the console server and shows its state live
 #define GL_SILENCE_DEPRECATION
 #include <algorithm>
 #include <cfloat>
@@ -24,13 +24,13 @@
 #include "server/gui/i18n.hpp"
 #include "server/gui/fonts.hpp"
 
-// ---------- theme ----------
+// theme
 struct pal {
   ImVec4 bg, panel, focus_bg, text, muted, border, frame, frame_hov, frame_act;
   ImVec4 accent, accent_hov, on_accent, track, fill, ok, warn, crit, head, row_alt;
 };
 static ImVec4 hx(unsigned v) {return ImVec4(((v>>16)&255)/255.f,((v>>8)&255)/255.f,(v&255)/255.f,1.f);}
-// Neutral greys, one teal accent (DESIGN.md). Status colors only mark machine state.
+// neutral greys, one teal accent (design.md). status colors only mark machine state
 static const pal LIGHT={hx(0xF5F6F6),hx(0xFFFFFF),hx(0xE7F3F1),hx(0x1D2527),hx(0x56625F),hx(0xD7DCDD),hx(0xECEFEF),hx(0xE1E6E6),hx(0xD5DCDC),
   hx(0x0F766E),hx(0x0B5F58),hx(0xFFFFFF),hx(0xE3E7E8),hx(0x7A8689),hx(0x137535),hx(0xA84D06),hx(0xB91C1C),hx(0xEEF1F1),hx(0xF8F9F9)};
 static const pal DARK={hx(0x111617),hx(0x192022),hx(0x12302D),hx(0xE5ECEC),hx(0x9AA8AA),hx(0x2B3537),hx(0x232C2E),hx(0x2C3739),hx(0x354244),
@@ -58,7 +58,7 @@ static void apply_theme(const pal&p,float scale) {
   ImGui::GetStyle()=st;
 }
 
-// ---------- log buffer (written from server threads) ----------
+// log buffer (written from server threads)
 struct logline {std::string t; lvl l; std::string s;};
 static std::mutex g_logmu;
 static std::deque<logline> g_log;
@@ -70,7 +70,7 @@ static void push_log(lvl l,const std::string&s) {
   if (g_log.size()>500) g_log.pop_front();
 }
 
-// ---------- app state ----------
+// app state
 enum class srvstate {starting,running,failed};
 struct app {
   core srv;
@@ -101,7 +101,7 @@ static int status_idx(const char*s) {
 }
 static ImVec4 status_col(const pal&p,int i) {return i==0?p.ok:i==1?p.warn:i==2?p.crit:p.muted;}
 
-// A dot drawn with the draw list, then the label in the same color.
+// a dot drawn with the draw list, then the label in the same color
 static void status_dot(const ImVec4&col,const char*label) {
   float h=ImGui::GetTextLineHeight(),r=h*0.22f;
   ImVec2 p=ImGui::GetCursorScreenPos();
@@ -111,7 +111,7 @@ static void status_dot(const ImVec4&col,const char*label) {
   ImGui::TextColored(col,"%s",label);
 }
 
-// Usage bar: grey while normal, warn/crit color past the server's thresholds.
+// usage bar: grey while normal, warn/crit color past the server's thresholds
 static void usage_bar(const pal&p,double v,double warn_at,double crit_at,float sc) {
   float w=ImGui::GetContentRegionAvail().x,h=ImGui::GetTextLineHeight();
   char txt[16]; std::snprintf(txt,sizeof txt,"%.0f%%",v);
@@ -147,7 +147,7 @@ static void copy_button(app&a,const char*key,const std::string&text) {
   }
 }
 
-// One address line: label, value, hint, buttons.
+// one address line: label, value, hint, buttons
 static void address_row(app&a,const pal&p,sid label,sid hint,const char*key,const std::string&value,bool with_open) {
   ImGui::PushFont(a.bold); ImGui::TextUnformatted(T(a,label)); ImGui::PopFont();
   ImGui::PushStyleColor(ImGuiCol_Text,p.accent);
@@ -161,14 +161,14 @@ static void address_row(app&a,const pal&p,sid label,sid hint,const char*key,cons
   }
 }
 
-// Icon buttons. ImGui cannot show SVG, so the icons are drawn with simple shapes,
-// in the text color, matching the web dashboard (globe + language code, moon / sun).
+// icon buttons. imgui cannot show svg, so the icons are drawn with simple shapes,
+// in the text color, matching the web dashboard (globe + language code, moon / sun)
 static void icon_globe(ImDrawList*dl,ImVec2 c,float r,ImU32 col,float th) {
   dl->AddCircle(c,r,col,0,th);
   dl->AddLine(ImVec2(c.x-r,c.y),ImVec2(c.x+r,c.y),col,th);
   dl->AddEllipse(c,ImVec2(r*0.45f,r),col,0.f,0,th);
 }
-// Crescent: a full disc, then a disc in the button's own color cut out of it.
+// crescent: a full disc, then a disc in the button's own color cut out of it
 static void icon_moon(ImDrawList*dl,ImVec2 c,float r,ImU32 col,ImU32 bg) {
   dl->AddCircleFilled(c,r,col);
   dl->AddCircleFilled(ImVec2(c.x+r*0.5f,c.y-r*0.42f),r*0.82f,bg);
@@ -219,7 +219,7 @@ static void draw_header(app&a,const pal&p) {
   if (theme_hit) {a.dark=!a.dark; apply_theme(a.dark?DARK:LIGHT,a.scale);}
 }
 
-// The focal panel: is the server up, and where do agents and teachers connect.
+// the focal panel: is the server up, and where do agents and teachers connect
 static void draw_connect(app&a,const pal&p) {
   ImGui::PushStyleColor(ImGuiCol_ChildBg,p.focus_bg);
   ImGui::PushStyleColor(ImGuiCol_Border,p.focus_bg);
@@ -314,7 +314,7 @@ static void draw_machines(app&a,const pal&p,float height) {
   ImGui::InputTextWithHint("##find",T(a,S_FIND_HINT),a.find,sizeof a.find);
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s",T(a,S_FIND));
 
-  // NavFlattened: Tab moves through every panel instead of staying inside one.
+  // NavFlattened: tab moves through every panel instead of staying inside one
   ImGui::BeginChild("tablewrap",ImVec2(0,height),ImGuiChildFlags_Borders|ImGuiChildFlags_NavFlattened,ImGuiWindowFlags_HorizontalScrollbar);
   if (a.st!=srvstate::running) {
     ImGui::Dummy(ImVec2(0,height*0.3f));
@@ -354,8 +354,8 @@ static void draw_machines(app&a,const pal&p,float height) {
     return;
   }
 
-  // No ScrollX/ScrollY on the table itself: a scrolling table gets its own inner window, which traps Tab.
-  // The surrounding panel scrolls instead, and the table is given its full natural width.
+  // no ScrollX/ScrollY on the table itself: a scrolling table gets its own inner window, which traps tab
+  // the surrounding panel scrolls instead, and the table is given its full natural width
   ImGuiTableFlags tf=ImGuiTableFlags_Sortable|ImGuiTableFlags_RowBg|ImGuiTableFlags_BordersInnerH|ImGuiTableFlags_SizingFixedFit|ImGuiTableFlags_Resizable;
   float s=a.scale;
   float natural=(120+105+110*3+90*2+115+70+110)*s+ImGui::GetStyle().CellPadding.x*2*10;
@@ -395,7 +395,7 @@ static void draw_machines(app&a,const pal&p,float height) {
       ImGui::TableNextRow(ImGuiTableRowFlags_None,ImGui::GetTextLineHeight()+ImGui::GetStyle().CellPadding.y*2);
       ImGui::PushStyleColor(ImGuiCol_Text,off?p.muted:p.text);
       ImGui::TableNextColumn(); ImGui::PushFont(a.bold); ImGui::TextUnformatted((m->name.empty()?m->id:m->name).c_str()); ImGui::PopFont();
-      // name set on the dashboard: the ID and description show on hover
+      // name set on the dashboard: the id and description show on hover
       if (!m->name.empty()||!m->desc.empty()) ImGui::SetItemTooltip("%s%s%s",m->id.c_str(),m->desc.empty()?"":"\n",m->desc.c_str());
       ImGui::TableNextColumn(); status_dot(status_col(p,si),T(a,(sid)(S_OK+si)));
       ImGui::TableNextColumn(); usage_bar(p,m->cpu,off?999:80,off?999:90,a.scale);
@@ -439,7 +439,7 @@ static void load_fonts(app&a,float px_scale) {
   auto add=[&](const unsigned char*lat,unsigned lat_n,const unsigned char*th,unsigned th_n,float size)->ImFont*{
     ImFontConfig c; c.FontDataOwnedByAtlas=false; c.OversampleH=2;
     ImFont*f=io.Fonts->AddFontFromMemoryTTF((void*)lat,(int)lat_n,size*px_scale,&c,latin);
-    // Noto Sans Thai draws smaller than Noto Sans at the same pixel size; enlarge it so mixed lines match.
+    // noto sans thai draws smaller than noto sans at the same pixel size; enlarge it so mixed lines match
     ImFontConfig m; m.FontDataOwnedByAtlas=false; m.MergeMode=true; m.OversampleH=2;
     m.GlyphOffset.y=-0.08f*size*px_scale;
     io.Fonts->AddFontFromMemoryTTF((void*)th,(int)th_n,size*1.18f*px_scale,&m,io.Fonts->GetGlyphRangesThai());
@@ -468,7 +468,7 @@ int main(int,char**) {
   glfwMakeContextCurrent(win);
   glfwSwapInterval(1);
 
-  // macOS reports a framebuffer larger than the window (points vs pixels); Windows/Linux scale the window itself.
+  // macos reports a framebuffer larger than the window (points vs pixels); windows/linux scale the window itself
   int ww,wh,fw,fh; glfwGetWindowSize(win,&ww,&wh); glfwGetFramebufferSize(win,&fw,&fh);
   float xs,ys; glfwGetWindowContentScale(win,&xs,&ys);
   bool fb_scaled=fw>ww;
@@ -522,7 +522,7 @@ int main(int,char**) {
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     glfwSwapBuffers(win);
 
-    // Start after the first frame so the window shows the starting state instead of a blank screen.
+    // start after the first frame so the window shows the starting state instead of a blank screen
     if (++frame==2&&a.st==srvstate::starting) a.st=a.srv.start(a.err)?srvstate::running:srvstate::failed;
   }
   a.srv.stop();

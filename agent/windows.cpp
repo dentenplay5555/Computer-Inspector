@@ -16,8 +16,9 @@ bool remem(uint64_t &t,uint64_t &av) {
   MEMORYSTATUSEX sas; 
   sas.dwLength=sizeof(sas);
   if (GlobalMemoryStatusEx(&sas)) {
-    t=sas.ullTotalPhys/(1024*1024);
-    av=sas.ullAvailPhys/(1024*1024);
+    // kB, like linux.cpp and macos.cpp (metric.cpp turns it into MB)
+    t=sas.ullTotalPhys/1024;
+    av=sas.ullAvailPhys/1024;
     return 0;
   }
   std::cerr<<"Error: unexpected error at reading memory occured\n";
@@ -55,6 +56,9 @@ bool renet(uint64_t &rx,uint64_t &tx) {
   for (ULONG i=0;i<tb->NumEntries;i++) {
     const MIB_IF_ROW2 &r=tb->Table[i];
     if (!r.InterfaceAndOperStatusFlags.HardwareInterface) continue;
+    // filter layers (e.g. "QoS Packet Scheduler") sit on top of the same adapter and
+    // repeat its byte counts; count the adapter once
+    if (r.InterfaceAndOperStatusFlags.FilterInterface) continue;
     if (r.OperStatus!=IfOperStatusUp) continue;
     rx+=r.InOctets;
     tx+=r.OutOctets;

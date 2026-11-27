@@ -17,6 +17,18 @@ static std::string read_f(const std::string&pth) {
   ss<<f.rdbuf();
   return ss.str();
 }
+// Puts tmp in place of dst. Some Windows C++ libraries refuse to rename onto an
+// existing file, so if the first try fails, remove dst and try again.
+static bool replace_file(const std::string&tmp,const std::string&dst) {
+  std::error_code ec;
+  std::filesystem::rename(tmp,dst,ec);
+  if (!ec) return true;
+  std::filesystem::remove(dst,ec);
+  std::filesystem::rename(tmp,dst,ec);
+  if (!ec) return true;
+  std::filesystem::remove(tmp,ec);
+  return false;
+}
 int64_t now_ms() {return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();}
 const char* status_of(const mah&m,int64_t n) {
   if (n-m.l_s>30000) return "offline";
@@ -24,7 +36,7 @@ const char* status_of(const mah&m,int64_t n) {
   else if (m.cpu>=80||m.ram>=80||m.disk>=85) return "warn";
   return "ok";
 }
-// "%41-01" -> "A-01". Returns false on a malformed escape.
+// "%41-01" -> "A-01". returns false on a malformed escape
 static bool url_dec(const std::string&in,std::string&out) {
   out.clear();
   for (size_t i=0;i<in.size();i++) {
@@ -36,9 +48,9 @@ static bool url_dec(const std::string&in,std::string&out) {
   }
   return true;
 }
-// Seat map file. Same rules as checkLayout() in dashboard/index.html:
+// seat map file. same rules as checkLayout() in dashboard/index.html
 // {"cols":1..30, "rows":1..50 (optional), "seats":{"<id>":[col,row]},
-//  "labels":[{"c","r","w","h","text"}] (optional, text required)}; no two blocks may overlap.
+//  "labels":[{"c","r","w","h","text"}] (optional, text required)}; no two blocks may overlap
 static bool check_layout(const json&j,std::string&why) {
   auto is_int=[](const json&v,long lo,long hi){return v.is_number_integer()&&v.get<long>()>=lo&&v.get<long>()<=hi;};
   if (!j.is_object()) {why="not an object"; return false;}
@@ -72,7 +84,7 @@ static bool check_layout(const json&j,std::string&why) {
     if (bs[a].c<bs[b].c+bs[b].w&&bs[b].c<bs[a].c+bs[a].w&&bs[a].r<bs[b].r+bs[b].h&&bs[b].r<bs[a].r+bs[a].h) {why="two blocks overlap"; return false;}
   return true;
 }
-// One seat or label per line, so the file stays easy to edit by hand.
+// one seat or label per line, so the file stays easy to edit by hand
 static std::string fmt_layout(const json&j) {
   auto d=[](const json&v){return v.dump(-1,' ',false,json::error_handler_t::replace);};
   std::string o="{\n  \"cols\": "+d(j["cols"]);
@@ -215,14 +227,14 @@ bool core::start(std::string&err) {
   http_->setOnConnectionCallback(
     [this](ix::HttpRequestPtr rq,std::shared_ptr<ix::ConnectionState> state)->ix::HttpResponsePtr {
       ix::WebSocketHttpHeaders head;
-      // Can this browser manage computers (rename, describe, remove, add back)?
+      // can this browser manage computers (rename, describe, remove, add back)?
       if (rq->uri=="/me"&&rq->method=="GET") {
         head["Content-Type"]="application/json";
         head["Cache-Control"]="no-store";
         return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,json{{"local",is_local(state->getRemoteIp())}}.dump());
       }
-      // Managing computers from the dashboard. Only from the server computer: the dashboard has
-      // no login, and a student must not be able to hide or rename their own PC.
+      // managing computers from the dashboard. only from the server computer: the dashboard has
+      // no login, and a student must not be able to hide or rename their own pc
       if ((rq->uri=="/forget"||rq->uri=="/restore"||rq->uri=="/meta")&&rq->method=="POST") {
         head["Content-Type"]="application/json";
         head["Cache-Control"]="no-store";
@@ -245,9 +257,9 @@ bool core::start(std::string&err) {
         if (!why.empty()) return reply(400,"Bad Request",{{"error",why}});
         return reply(200,"OK",{{"ok",true}});
       }
-      // Saving the seat map from the dashboard's editor. Only from the server computer:
-      // the dashboard has no login, so other PCs on the LAN must not rewrite the room.
-      // Requiring application/json also makes a browser refuse cross-site posts (preflight).
+      // saving the seat map from the dashboard's editor. only from the server computer
+      // the dashboard has no login, so other pcs on the lan must not rewrite the room
+      // requiring application/json also makes a browser refuse cross-site posts (preflight)
       if (rq->uri=="/layout.json"&&rq->method=="POST") {
         head["Content-Type"]="application/json";
         head["Cache-Control"]="no-store";
@@ -267,9 +279,7 @@ bool core::start(std::string&err) {
           f<<fmt_layout(j);
           if (!f) return reply(500,"Internal Server Error","cannot write "+tmp);
         }
-        std::error_code ec;
-        std::filesystem::rename(tmp,lp,ec);
-        if (ec) {std::filesystem::remove(tmp,ec); return reply(500,"Internal Server Error","cannot replace "+lp);}
+        if (!replace_file(tmp,lp)) return reply(500,"Internal Server Error","cannot replace "+lp);
         log(lvl::info,"Seat map saved: "+lp);
         return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,"{\"ok\":true}");
       }
@@ -283,7 +293,7 @@ bool core::start(std::string&err) {
           return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,hist_->series(id).dump(-1,' ',false,json::error_handler_t::replace));
         }
       }
-      // Seat map: only this exact path, read from the folder that holds the server executable.
+      // seat map: only this exact path, read from the folder that holds the server executable
       if (rq->uri=="/layout.json") {
         std::string lp=exe_dir()+"/layout.json";
         std::error_code ec;
@@ -373,7 +383,7 @@ std::string core::restore(const std::string&id) {
 }
 
 std::string core::set_meta(const std::string&id,const std::string&name,const std::string&desc) {
-  // bytes: 40 Thai characters are 120 bytes in UTF-8, 200 are 600
+  // bytes: 40 thai characters are 120 bytes in utf-8, 200 are 600
   if (name.size()>120||desc.size()>600) return "too long";
   {
     std::lock_guard<std::mutex> lock(mu_);
@@ -433,9 +443,7 @@ void core::save_meta() {
     f<<j.dump(2,' ',false,json::error_handler_t::replace)<<'\n';
     if (!f) {log(lvl::err,"Cannot write "+tmp);return;}
   }
-  std::error_code ec;
-  std::filesystem::rename(tmp,p,ec);
-  if (ec) {std::filesystem::remove(tmp,ec); log(lvl::err,"Cannot replace "+p);}
+  if (!replace_file(tmp,p)) log(lvl::err,"Cannot replace "+p);
 }
 
 netif core::net() const {std::lock_guard<std::mutex> lock(mu_); return net_;}

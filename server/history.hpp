@@ -1,15 +1,15 @@
 #pragma once
-// Per-machine history and "normal behaviour" baseline.
+// per-machine history and "normal behaviour" baseline
 //
-// For every machine and every tracked value (cpu, rx, tx):
+// for every machine and every tracked value (cpu, rx, tx)
 //  - a 1-hour ring buffer of 10-second averages, for graphs (/history)
 //  - the baseline: during the learning period an exact running mean and variance
 //    (Welford); after it, an EWMA that starts from those values and follows slow changes
-//  - an abnormal flag: z-score > z_limit AND value > an absolute floor,
+//  - an abnormal flag: z-score > z_limit and value > an absolute floor,
 //    held for `sustain` samples in a row, and only after the learning period
 //
-// Thread safety: every public method takes this class's own mutex and nothing else,
-// so it can be called from any thread. Never call it while holding g_mu.
+// thread safety: every public method takes this class's own mutex and nothing else,
+// so it can be called from any thread. never call it while holding g_mu
 #include <array>
 #include <cstdint>
 #include <map>
@@ -36,17 +36,17 @@ public:
   static constexpr int STEP_MS=10000, SLOTS=360;   // 10 s x 360 = 1 hour
 
   explicit history(hist_cfg c);
-  // Reads <dir>/*.jsonl so baselines and graphs survive a restart. Returns lines loaded.
+  // reads <dir>/*.jsonl so baselines and graphs survive a restart. returns lines loaded
   size_t load();
-  // One sample from an agent (server time). Writes a line to disk when a 10 s bucket closes.
+  // one sample from an agent (server time). writes a line to disk when a 10 s bucket closes
   void add(const std::string&id,int64_t now,double cpu,double rx,double tx);
   bool has(const std::string&id) const;
-  // Names of the values that are abnormal right now, e.g. {"rx"}. Empty when stale.
+  // names of the values that are abnormal right now, e.g. {"rx"}. empty when stale
   std::vector<std::string> abnormal(const std::string&id,int64_t now) const;
   bool learning(const std::string&id,int64_t now) const;
-  // Graph data for /history: {"id","step_s","t":[...],"cpu":[...],"rx":[...],"tx":[...],"base":{...}}
+  // graph data for /history: {"id","step_s","t":[...],"cpu":[...],"rx":[...],"tx":[...],"base":{...}}
   nlohmann::json series(const std::string&id) const;
-  // True when the id can be used as a file name (letters, digits, - _ .; no leading dot).
+  // true when the id can be used as a file name (letters, digits, - _ .; no leading dot)
   static bool safe_id(const std::string&id);
 
 private:

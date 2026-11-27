@@ -28,6 +28,16 @@ else()
   set(AGENT_PLATFORM  agent/linux.cpp)
   set(SERVER_PLATFORM server/netinfo_linux.cpp)
 endif()
+# warning flags: GCC / Clang / MinGW use -Wall -Wextra, Visual Studio's cl.exe does not know them.
+# cl.exe also needs /utf-8 (the Thai strings are UTF-8) and NOMINMAX (windows.h defines
+# min/max macros that break std::min / std::max).
+if(MSVC)
+  set(WARN_FLAGS /W4)
+  add_compile_options(/utf-8)
+  add_compile_definitions(NOMINMAX)
+else()
+  set(WARN_FLAGS -Wall -Wextra)
+endif()
 add_executable(agent
   agent/main.cpp
   agent/metric.cpp
@@ -35,7 +45,7 @@ add_executable(agent
 )
 target_link_libraries(agent PRIVATE ixwebsocket)
 target_include_directories(agent PRIVATE ${CMAKE_SOURCE_DIR})
-target_compile_options(agent PRIVATE -Wall -Wextra)
+target_compile_options(agent PRIVATE ${WARN_FLAGS})
 if(WIN32)
   target_link_libraries(agent PRIVATE iphlpapi ws2_32)
 endif()
@@ -49,7 +59,7 @@ add_executable(server
 )
 target_link_libraries(server PRIVATE ixwebsocket)
 target_include_directories(server PRIVATE ${CMAKE_SOURCE_DIR})
-target_compile_options(server PRIVATE -Wall -Wextra)
+target_compile_options(server PRIVATE ${WARN_FLAGS})
 if(WIN32)
   target_link_libraries(server PRIVATE iphlpapi ws2_32)
 endif()
@@ -58,8 +68,8 @@ if (MINGW)
   target_link_options(server PRIVATE -static)
 endif()
 
-# ---------- server_gui: native window for the server (Dear ImGui + GLFW + OpenGL 3) ----------
-# Turn off with -DSERVER_GUI=OFF on machines without a desktop (Linux needs X11/Wayland dev packages).
+#  server_gui: native window for the server (dear imgui + glfw + opengl 3)
+# turn off with -DSERVER_GUI=OFF on machines without a desktop (linux needs x11/wayland dev packages)
 option(SERVER_GUI "Build the server_gui window" ON)
 if (SERVER_GUI)
   set(GLFW_BUILD_DOCS     OFF CACHE BOOL "" FORCE)
@@ -79,7 +89,7 @@ if (SERVER_GUI)
   FetchContent_MakeAvailable(glfw imgui)
   find_package(OpenGL REQUIRED)
 
-  # Noto Sans + Noto Sans Thai (SIL OFL 1.1), downloaded once and compiled into the binary.
+  # noto sans + noto sans thai (sil ofl 1.1), downloaded once and compiled into the binary
   set(FONT_DIR ${CMAKE_BINARY_DIR}/fonts)
   set(FONT_BASE https://github.com/notofonts/notofonts.github.io/raw/main/fonts)
   set(FONT_LIST
@@ -131,8 +141,13 @@ if (SERVER_GUI)
   target_link_libraries(server_gui PRIVATE ixwebsocket glfw OpenGL::GL)
   if (WIN32)
     target_link_libraries(server_gui PRIVATE iphlpapi ws2_32 shell32)
+    if (MSVC)
+      # no console window behind the GUI; keep main() as the entry point
+      set_target_properties(server_gui PROPERTIES WIN32_EXECUTABLE ON)
+      target_link_options(server_gui PRIVATE /ENTRY:mainCRTStartup)
+    endif()
     if (MINGW)
-      # No console window behind the GUI; MinGW's runtime still calls main().
+      # no console window behind the gui; mingw's runtime still calls main()
       set_target_properties(server_gui PROPERTIES WIN32_EXECUTABLE ON)
       target_link_options(server_gui PRIVATE -static)
     endif()
