@@ -4,9 +4,13 @@
 #include <atomic>
 #include <csignal>
 #include <cstring>
+#include <cstdlib>
 #include <ixwebsocket/IXNetSystem.h>
 #include <ixwebsocket/IXWebSocket.h>
 #include "metric.hpp"
+#include "pin.hpp"
+#include "common/tlspin.hpp"
+#include <ixwebsocket/IXSocketTLSOptions.h>
 #include <string>
 #include <stdexcept>
 #ifdef _WIN32
@@ -22,11 +26,12 @@ void hde(int) {r=0;}
 int main(int argc, char *argv[]) {
   char hn[200+200];
   ix::initNetSystem();
+  if (!tls_global_init()) {std::cerr<<"Error: TLS could not be initialised\n"; return 1;}
   ix::WebSocket ws;
   int stau=ghn(hn,sizeof(hn));
   if (stau!=0) std::strcpy(hn, "unknown");
   std::signal(SIGINT, hde);
-  std::string id=hn,port="8080",host="127.0.0.1",surl;
+  std::string id=hn,port="8080",host="127.0.0.1",surl,pin;
   for (int i=1;i<argc;i++) {
     if (std::string(argv[i])=="--server"&&i+1<argc) surl=argv[++i];
     else if (std::string(argv[i])=="--id"&&i+1<argc) {
@@ -44,8 +49,43 @@ int main(int argc, char *argv[]) {
       }
     }
     else if (std::string(argv[i])=="--host"&&i+1<argc) host=argv[++i];
+    else if (std::string(argv[i])=="--pin"&&i+1<argc) pin=argv[++i];
+    else if (std::string(argv[i])=="--pin-file"&&i+1<argc) {
+      // on the server pc itself: take the pin from the server's certificate file
+      std::string err;
+      if (!pin_from_cert_file(argv[++i],pin,err)) {std::cerr<<"Error: "<<err<<'\n'; return 2;}
+    }
   }
-  std::string url=surl.empty() ? "ws://"+host+":"+port+"/agent" : surl;
+  // the server is only trusted with its certificate pin (shown in the server window and log)
+  if (pin.empty()) {
+    std::cerr<<"Error: --pin is missing. Copy it from the server window or the server log\n"
+               "       (\"Agent pin: ...\"), e.g. agent --host 192.168.1.10 --pin 3fa2-91bc-...\n"
+               "       On the server pc itself, --pin-file <folder of the server>/server.crt also works.\n";
+    return 2;
+  }
+  std::string url=surl.empty() ? "wss://"+host+":"+port+"/agent" : surl;
+  if (url.rfind("wss://",0)!=0) {std::cerr<<"Error: --server must start with wss://\n"; return 2;}
+  {
+    // host and port for the pin check, from the url: wss://host:port/...
+    std::string rest=url.substr(6);
+    rest=rest.substr(0,rest.find('/'));
+    auto c=rest.rfind(':');
+    host=c==std::string::npos?rest:rest.substr(0,c);
+    port=c==std::string::npos?"443":rest.substr(c+1);
+  }
+  std::string pem,info;
+  while (r) {
+    pin_result pr=fetch_pinned_cert(host,std::atoi(port.c_str()),pin,pem,info);
+    if (pr==pin_result::ok) break;
+    std::cerr<<(pr==pin_result::mismatch?"Error: NOT connecting: ":"Waiting for the server: ")<<info<<'\n';
+    for (int k=0;k<30&&r;k++) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+  if (!r) {ix::uninitNetSystem(); return 0;}
+  std::cout<<"Server certificate matches the pin\n";
+  ix::SocketTLSOptions tlso;
+  tlso.caFile=pem;                       // trust this certificate and nothing else
+  tlso.disable_hostname_validation=true; // it is pinned, the address may change (DHCP)
+  ws.setTLSOptions(tlso);
   ws.setUrl(url);
   ws.setPingInterval(10);
   ws.setOnMessageCallback([](const ix::WebSocketMessagePtr& msg){

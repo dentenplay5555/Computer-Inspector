@@ -18,10 +18,43 @@ Everyone else sends normal noise. Use --all-normal to turn the special cases off
 
 Only the Python standard library is used. Ctrl+C stops all agents.
 """
-import argparse, base64, json, os, random, socket, struct, sys, time
+import argparse, base64, hashlib, json, os, random, socket, ssl, struct, sys, time
 
-def connect(host, port):
-    s = socket.create_connection((host, port), timeout=2)
+# tls: the server only speaks wss://. like the real agent, trust exactly the certificate
+# whose sha-256 matches the pin (shown in the server window / log as "Agent pin: ...")
+TLS = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+TLS.check_hostname = False          # checked by the pin instead
+TLS.verify_mode = ssl.CERT_NONE
+
+def pin_of_der(der):
+    h = hashlib.sha256(der).hexdigest()
+    return "-".join(h[i:i + 4] for i in range(0, 32, 4))
+
+def pin_matches(pin, der):
+    p = "".join(c for c in pin.lower() if c not in "-: ")
+    return len(p) >= 32 and hashlib.sha256(der).hexdigest().startswith(p)
+
+def pin_from_args(pin, pin_file):
+    # --pin, else --pin-file, else the server's certificate in build/ (same pc as the server)
+    if pin:
+        return pin
+    path = pin_file or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "build", "server.crt")
+    try:
+        with open(path) as f:
+            return pin_of_der(ssl.PEM_cert_to_DER_cert(f.read()))
+    except OSError:
+        sys.exit(f"No --pin given and {path} not found. Copy the pin from the server window or log.")
+
+def tls_wrap(raw, host, pin):
+    s = TLS.wrap_socket(raw, server_hostname=host)
+    if not pin_matches(pin, s.getpeercert(binary_form=True)):
+        s.close()
+        # not an OSError on purpose: retrying will not help, stop and say why
+        raise SystemExit("The server's certificate does not match the pin (wrong pin, or not our server).")
+    return s
+
+def connect(host, port, pin):
+    s = tls_wrap(socket.create_connection((host, port), timeout=2), host, pin)
     key = base64.b64encode(os.urandom(16)).decode()
     s.sendall((f"GET /agent HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\n"
                f"Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
@@ -54,12 +87,15 @@ def main():
     ap.add_argument("-n", "--count", type=int, default=12, help="number of agents (default 12)")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8080)
+    ap.add_argument("--pin", help="the server's agent pin (default: read build/server.crt)")
+    ap.add_argument("--pin-file", help="server.crt to take the pin from")
     ap.add_argument("--all-normal", action="store_true", help="no warning/critical/offline/jump agents")
     ap.add_argument("--offline-after", type=int, default=20, help="seconds before A-04 goes quiet")
     ap.add_argument("--jump-after", type=int, default=120, help="seconds before A-05 download jumps")
     ap.add_argument("--seconds", type=int, default=0, help="stop after this many seconds (0 = until Ctrl+C)")
     ap.add_argument("--seed", type=int, default=None)
     a = ap.parse_args()
+    pin = pin_from_args(a.pin, a.pin_file)
     if not 1 <= a.count <= 200:
         sys.exit("--count must be between 1 and 200")
     rnd = random.Random(a.seed)
@@ -115,7 +151,7 @@ def main():
                        "disk": {"use_gb": 120.0, "tot_gb": 256.0, "per": 46.9}}
                 try:
                     if mid not in conns:
-                        conns[mid] = connect(a.host, a.port)
+                        conns[mid] = connect(a.host, a.port, pin)
                     send(conns[mid], json.dumps(msg))
                     warned = False
                 except OSError:

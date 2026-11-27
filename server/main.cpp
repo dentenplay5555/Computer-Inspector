@@ -26,7 +26,7 @@ int main(int argc,char*argv[]) {
   }
   ix::initNetSystem();
   std::cout<<std::string(40,'=')<<"\nSERVER LOG\n";
-  srv.on_log=[](lvl l,const std::string&s){(l==lvl::info?std::cout:std::cerr)<<s<<'\n';};
+  srv.on_log=[](lvl l,const std::string&s){(l==lvl::info?std::cout:std::cerr)<<s<<std::endl;};   // flush: logs may go to a file
   srv.on_tick=[](const std::vector<mah>&snp,int64_t n){
     std::cout<<std::left<<std::setw(16)<<"ID"<<std::setw(9)<<"STATUS"<<std::right<<std::setw(7)<<"CPU%"<<std::setw(7)<<"RAM%"<<std::setw(7)<<"DISK%"<<std::setw(8)<<"RX(kb)"<<std::setw(7)<<"TX(kb)"<<'\n';
     for (const auto&m:snp) {

@@ -15,14 +15,47 @@ Start the server first, with a learning period shorter than --jump-at, e.g.:
 
 Only the Python standard library is used (no internet needed).
 """
-import argparse, base64, json, os, random, socket, struct, threading, time
+import argparse, base64, hashlib, json, os, random, socket, ssl, struct, sys, threading, time
 
-def ws_connect(host, port, path, wait_s=10):
+# tls: the server only speaks wss://. like the real agent, trust exactly the certificate
+# whose sha-256 matches the pin (shown in the server window / log as "Agent pin: ...")
+TLS = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+TLS.check_hostname = False          # checked by the pin instead
+TLS.verify_mode = ssl.CERT_NONE
+
+def pin_of_der(der):
+    h = hashlib.sha256(der).hexdigest()
+    return "-".join(h[i:i + 4] for i in range(0, 32, 4))
+
+def pin_matches(pin, der):
+    p = "".join(c for c in pin.lower() if c not in "-: ")
+    return len(p) >= 32 and hashlib.sha256(der).hexdigest().startswith(p)
+
+def pin_from_args(pin, pin_file):
+    # --pin, else --pin-file, else the server's certificate in build/ (same pc as the server)
+    if pin:
+        return pin
+    path = pin_file or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "build", "server.crt")
+    try:
+        with open(path) as f:
+            return pin_of_der(ssl.PEM_cert_to_DER_cert(f.read()))
+    except OSError:
+        sys.exit(f"No --pin given and {path} not found. Copy the pin from the server window or log.")
+
+def tls_wrap(raw, host, pin):
+    s = TLS.wrap_socket(raw, server_hostname=host)
+    if not pin_matches(pin, s.getpeercert(binary_form=True)):
+        s.close()
+        # not an OSError on purpose: retrying will not help, stop and say why
+        raise SystemExit("The server's certificate does not match the pin (wrong pin, or not our server).")
+    return s
+
+def ws_connect(host, port, path, pin, wait_s=10):
     # retry while the server is still starting up
     deadline = time.time() + wait_s
     while True:
         try:
-            s = socket.create_connection((host, port))
+            s = tls_wrap(socket.create_connection((host, port)), host, pin)
             break
         except ConnectionRefusedError:
             if time.time() > deadline:
@@ -70,11 +103,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8080)
+    ap.add_argument("--pin", help="the server's agent pin (default: read build/server.crt)")
+    ap.add_argument("--pin-file", help="server.crt to take the pin from")
     ap.add_argument("--jump-at", type=int, default=900, help="seconds of normal traffic before JUMP-C jumps")
     ap.add_argument("--after", type=int, default=120, help="seconds to keep sending after the jump")
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--out", default="baseline_results.json")
     a = ap.parse_args()
+    pin = pin_from_args(a.pin, a.pin_file)
     rnd = random.Random(a.seed)
 
     events = {"NORM-A": [], "NORM-B": [], "JUMP-C": []}   # (seconds since start, abn list)
@@ -83,7 +119,7 @@ def main():
     stop = threading.Event()
 
     def watch():
-        d = ws_connect(a.host, a.port, "/dashboard")
+        d = ws_connect(a.host, a.port, "/dashboard", pin)
         last = {}
         while not stop.is_set():
             op, payload = ws_recv(d)
@@ -103,7 +139,7 @@ def main():
                     last[mid] = abn
     threading.Thread(target=watch, daemon=True).start()
 
-    conns = {k: ws_connect(a.host, a.port, "/agent") for k in events}
+    conns = {k: ws_connect(a.host, a.port, "/agent", pin) for k in events}
     burst_left = 0
     total = a.jump_at + a.after
     sent = 0

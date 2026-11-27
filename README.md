@@ -42,7 +42,7 @@ Status: `[x]` done, `[ ]` planned.
 ## How it works
  
 ```
-  Student PC (agent, C++)  -> WebSocket ->  Server (C++)  ->  Dashboard (web + Desktop app)
+  Student PC (agent, C++)  -> wss:// (TLS) ->  Server (C++)  -> https:// ->  Dashboard (web + Desktop app)
 <measures CPU/RAM/network>          <keeps latest state + history>
 ```
  
@@ -52,6 +52,7 @@ Status: `[x]` done, `[ ]` planned.
 agent/       measures statistics on each computer
 server/      receives data from agents and serves the dashboard
 server/gui/  native window for the server (Dear ImGui + GLFW)
+common/      code shared by agent and server (TLS certificate pin)
 dashboard/   web page for the teacher
 docs/        API reference and test notes
 ```
@@ -84,7 +85,9 @@ To fill the dashboard without real PCs, start virtual agents in a second termina
 ./test.sh -n 30 --all-normal
 ```
 
-They send the same JSON as the real agent and reconnect if the server restarts.
+They send the same JSON as the real agent, over TLS with the same pin check, and
+reconnect if the server restarts. On the server PC they read the pin from
+`build/server.crt`; for a server elsewhere add `--host <ip> --pin <pin>`.
 `./test.sh --help` lists all options (needs Python 3, no extra packages).
 
 ## Build
@@ -96,6 +99,9 @@ cmake -S . -B build #this section is optional but required to for first time you
 cmake --build build #<--target <server/agent> (This section is optional: default is agent) >
 ./build/agent #or you can use ./build/server if you compiled server source code
 ```
+
+The first configure also downloads mbedTLS 3.6 (TLS for `wss://` and `https://`; checked
+against its published SHA-256), so no system OpenSSL is needed.
 
 Targets: `agent`, `server` (console) and `server_gui` (window). Both servers use the same
 core, so they behave the same. Run either one from the repository root so it can find
@@ -109,6 +115,30 @@ X11 or Wayland development packages; to skip it on a machine without a desktop:
 cmake -S . -B build -DSERVER_GUI=OFF
 ```
  
+## Encryption and the agent pin
+
+Everything on the network is encrypted with TLS: agents connect with `wss://` (port 8080)
+and the dashboard is `https://` (port 8081). On its first start the server makes its own
+certificate and key, `server.crt` and `server.key`, next to the server executable (keep
+`server.key` private; deleting both makes a new pair, and every agent then needs the new
+pin).
+
+Agents trust only that certificate. The server window and the server log show its
+**agent pin** (the first 128 bits of the certificate's SHA-256), and every agent needs it:
+
+```
+./agent --host 192.168.1.10 --pin 3fa2-91bc-0d4e-77a1-5c20-e9f3-1b86-44d0
+```
+
+An agent without `--pin` does not start, and one whose server presents a different
+certificate (a wrong pin, a reinstalled server, or someone pretending to be the server)
+refuses to connect and says so. On the server PC itself, `--pin-file build/server.crt`
+reads the pin from the certificate (`run.sh --agent` and `run.bat --agent` do this).
+
+The browser warns the first time, because the certificate is the server's own and not from
+a public authority: accept it once per browser, or install `server.crt` as trusted on the
+teacher PCs. The dashboard only talks to port 8081, so it is one exception.
+
 ## History and abnormal usage
 
 The server keeps, for every computer, the last hour of CPU, download (rx) and upload (tx)

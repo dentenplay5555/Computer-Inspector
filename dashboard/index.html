@@ -514,7 +514,7 @@
       lost: "หลุดการเชื่อมต่อ กำลังต่อใหม่... ข้อมูลด้านล่างอาจไม่เป็นปัจจุบัน",
       ok: "ปกติ", warn: "เฝ้าระวัง", crit: "วิกฤต", offline: "ออฟไลน์",
       waiting: "รอข้อมูลจากเซิร์ฟเวอร์...",
-      empty: "ยังไม่มีเครื่องเชื่อมต่อ", emptyHint: "รันคำสั่งนี้บนเครื่องนักเรียนแต่ละเครื่อง:",
+      empty: "ยังไม่มีเครื่องเชื่อมต่อ", emptyHint: "รันคำสั่งนี้บนเครื่องนักเรียนแต่ละเครื่อง (ดู pin ได้ในหน้าต่าง server):",
       down: "รับ", up: "ส่ง", noData: d => `ไม่ได้รับข้อมูลมา ${d}`,
       unit: { s: "วินาที", m: "นาที", h: "ชั่วโมง", d: () => "วัน" },
       removeBtn: "เอาออกจากแดชบอร์ด", rmTitle: id => `เอา ${id} ออกจากแดชบอร์ด?`,
@@ -565,7 +565,7 @@
       lost: "Connection lost, reconnecting... The data below may be out of date.",
       ok: "Normal", warn: "Watch", crit: "Critical", offline: "Offline",
       waiting: "Waiting for data from the server...",
-      empty: "No computers have connected yet", emptyHint: "Run this on each student PC:",
+      empty: "No computers have connected yet", emptyHint: "Run this on each student PC (the pin is in the server window):",
       down: "Down", up: "Up", noData: d => `No data for ${d}`,
       unit: { s: "s", m: "min", h: "h", d: n => n === 1 ? "day" : "days" },
       removeBtn: "Remove from dashboard", rmTitle: id => `Remove ${id} from the dashboard?`,
@@ -634,6 +634,7 @@
   let layoutNote = null;        // key of the note to show about layout.json
   let mapMsg = null;            // short "saved" message next to the edit button
   let notice = null;            // {key, id, bad, act} shown under the status strip after remove / add back
+  let pin = "";                 // agent pin, only told to a browser on the server computer
   let can = false;              // this browser may manage computers (it is on the server computer)
   const nm = m => m.name || m.id;
   const t = () => TXT[lang];
@@ -1394,7 +1395,7 @@
       $("grid").hidden = false; $("map").hidden = true;
       const host = location.hostname || "<server-ip>";
       setHTML($("grid"), `<div class="empty" style="grid-column:1/-1"><h2>${esc(T.empty)}</h2>
-        <p>${esc(T.emptyHint)}</p><code>./agent --host ${esc(host)}</code></div>`);
+        <p>${esc(T.emptyHint)}</p><code>./agent --host ${esc(host)} --pin ${esc(pin || "<pin>")}</code></div>`);
       return;
     }
     if (mapOn) setHTML($("map"), layout ? renderMap(ms)
@@ -1439,24 +1440,28 @@
   });
   addEventListener("beforeunload", e => { if (ed && ed.dirty) { e.preventDefault(); e.returnValue = ""; } });
 
+  // the newest snapshot, once a second, over the same https connection as this page
+  // (a separate wss:// port would need its own certificate exception in the browser)
   function connect() {
-    const host = location.hostname || "127.0.0.1";
-    const ws = new WebSocket("ws://" + host + ":8080/dashboard");
-    ws.onopen = () => { conn = "connected"; render(); };
-    ws.onmessage = (e) => {
-      let dt;
-      try { dt = JSON.parse(e.data); } catch (err) { return; }
-      if (!dt || !Array.isArray(dt.machines)) return;
-      dt.machines.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
-      lastDt = dt;
-      render();
-    };
-    ws.onclose = () => { if (conn !== "connecting" || lastDt) conn = "lost"; render(); setTimeout(connect, 2000); };
+    fetch("/snapshot", { cache: "no-store" })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(dt => {
+        if (!dt || !Array.isArray(dt.machines)) throw new Error("bad snapshot");
+        dt.machines.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+        lastDt = dt;
+        conn = "connected";
+      })
+      .catch(() => { if (conn !== "connecting" || lastDt) conn = "lost"; })
+      .finally(() => { render(); setTimeout(connect, 1000); });
   }
   render();
   loadLayout();
   connect();
-  fetch("/me", { cache: "no-store" }).then(r => r.json()).then(j => { can = j && j.local === true; render(); }).catch(() => {});
+  fetch("/me", { cache: "no-store" }).then(r => r.json()).then(j => {
+    can = j && j.local === true;
+    pin = j && typeof j.pin === "string" ? j.pin : "";
+    render();
+  }).catch(() => {});
   </script>
 </body>
 </html>

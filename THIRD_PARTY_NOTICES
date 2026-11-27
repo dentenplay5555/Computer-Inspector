@@ -4,6 +4,9 @@ Third-party components used by Computer Inspector
 IXWebSocket (https://github.com/machinezone/IXWebSocket)
   License: BSD 3-Clause. Used by agent, server, server_gui.
 
+Mbed TLS 3.6 (https://github.com/Mbed-TLS/mbedtls)
+  License: Apache License 2.0. Used by agent, server, server_gui (TLS, certificates).
+
 nlohmann/json (agent/json.hpp, https://github.com/nlohmann/json)
   License: MIT.
 

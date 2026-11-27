@@ -245,8 +245,9 @@ static void draw_connect(app&a,const pal&p) {
     ImGui::TextDisabled("%s: %d",T(a,S_DASH_OPEN),a.srv.dash_count());
     if (n.net_ip.empty()) ImGui::TextColored(p.warn,"%s",T(a,S_NO_NETWORK));
     ImGui::Spacing();
-    std::string agent="ws://"+ip+":"+std::to_string(a.srv.ws_port)+"/agent";
-    std::string dash="http://"+ip+":"+std::to_string(a.srv.http_port);
+    // agents only need --host and the pin; the pin is what makes them trust this server
+    std::string agent=a.srv.pin();
+    std::string dash="https://"+ip+":"+std::to_string(a.srv.http_port);
     float avail=ImGui::GetContentRegionAvail().x;
     bool two=avail>760*a.scale;
     if (two && ImGui::BeginTable("addr",2,ImGuiTableFlags_SizingStretchSame)) {
@@ -333,7 +334,7 @@ static void draw_machines(app&a,const pal&p,float height) {
 #else
       "./agent"
 #endif
-      )+" --host "+(n.net_ip.empty()?"127.0.0.1":n.net_ip);
+      )+" --host "+(n.net_ip.empty()?"127.0.0.1":n.net_ip)+" --pin "+a.srv.pin();
     ImGui::PushFont(a.title);
     centered_note(p,cmd.c_str(),p.accent);
     ImGui::PopFont();

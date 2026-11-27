@@ -12,6 +12,7 @@
 #include <vector>
 #include "netinfo.hpp"
 #include "history.hpp"
+#include "tlscert.hpp"
 
 namespace ix { class WebSocketServer; class HttpServer; }
 
@@ -48,6 +49,9 @@ public:
   bool running() const {return run_;}
 
   netif net() const;
+  // what agents need to trust this server: the first 128 bits of the certificate's
+  // sha-256, e.g. "3fa2-91bc-…" (empty before the first start())
+  std::string pin() const;
   std::vector<mah> machines() const;
   int dash_count() const;
   int agent_count() const;
@@ -77,6 +81,8 @@ private:
   netif net_;
   std::unique_ptr<ix::WebSocketServer> wsr_;
   std::unique_ptr<ix::HttpServer> http_;
+  tls_id tls_;                       // server.crt / server.key next to the executable
+  std::string snap_;                 // newest snapshot JSON, for GET /snapshot; guarded by mu_
   std::unique_ptr<history> hist_;  // has its own lock; never call it while holding mu_
 
   // names, descriptions and removed computers, kept in machines.json next to the executable

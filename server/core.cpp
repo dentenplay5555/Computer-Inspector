@@ -9,6 +9,8 @@
 #include <ixwebsocket/IXHttpServer.h>
 #include "agent/json.hpp"
 #include "exedir.hpp"
+#include "common/tlspin.hpp"
+#include <ixwebsocket/IXSocketTLSOptions.h>
 using json=nlohmann::json;
 
 static std::string read_f(const std::string&pth) {
@@ -186,7 +188,25 @@ bool core::start(std::string&err) {
   if (net_.net_ip.empty()) log(lvl::warn,"Network IPv4 not found");
   else log(lvl::info,"Network interface: "+net_.net_inter+", local ip: "+net_.net_ip);
 
+  // tls for both ports: agents use wss://, the dashboard https://
+  static bool tls_ready=tls_global_init();
+  if (!tls_ready) {err="TLS could not be initialised"; log(lvl::err,err); return false;}
+  {
+    tls_id t;
+    if (!load_or_make_cert(exe_dir(),t,err)) {err="TLS certificate: "+err; log(lvl::err,err); return false;}
+    std::lock_guard<std::mutex> lock(mu_);
+    tls_=t;
+  }
+  log(lvl::info,"TLS certificate: "+tls_.cert);
+  log(lvl::info,"Agent pin: "+fp_pin(tls_.fp)+"  (agent --pin "+fp_pin(tls_.fp)+")");
+  ix::SocketTLSOptions tlso;
+  tlso.tls=true;
+  tlso.certFile=tls_.cert;
+  tlso.keyFile=tls_.key;
+  tlso.caFile="NONE";                // clients do not present certificates
+
   wsr_=std::make_unique<ix::WebSocketServer>(ws_port,"0.0.0.0");
+  wsr_->setTLSOptions(tlso);
   wsr_->setOnClientMessageCallback([this](std::shared_ptr<ix::ConnectionState> state,ix::WebSocket&ws,const ix::WebSocketMessagePtr&msg){
     switch (msg->type) {
       case ix::WebSocketMessageType::Open: {
@@ -224,14 +244,29 @@ bool core::start(std::string&err) {
   log(lvl::info,"Agents can connect on port "+std::to_string(ws_port));
 
   http_=std::make_unique<ix::HttpServer>(http_port,"0.0.0.0");
+  http_->setTLSOptions(tlso);
   http_->setOnConnectionCallback(
     [this](ix::HttpRequestPtr rq,std::shared_ptr<ix::ConnectionState> state)->ix::HttpResponsePtr {
       ix::WebSocketHttpHeaders head;
+      // the dashboard polls this once a second (same port and certificate as the page)
+      if (rq->uri=="/snapshot"&&rq->method=="GET") {
+        std::string body;
+        {std::lock_guard<std::mutex> lock(mu_); body=snap_;}
+        if (body.empty()) body=json{{"type","snapshot"},{"ts",now_ms()},{"machines",json::array()},{"removed",json::array()}}.dump();
+        head["Content-Type"]="application/json";
+        head["Cache-Control"]="no-store";
+        return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,body);
+      }
       // can this browser manage computers (rename, describe, remove, add back)?
       if (rq->uri=="/me"&&rq->method=="GET") {
         head["Content-Type"]="application/json";
         head["Cache-Control"]="no-store";
-        return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,json{{"local",is_local(state->getRemoteIp())}}.dump());
+        bool loc=is_local(state->getRemoteIp());
+        json me={{"local",loc}};
+        // the pin only for a browser on this computer: elsewhere the page itself could have
+        // come through someone in the middle, who would show their own pin
+        if (loc) me["pin"]=pin();
+        return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,me.dump());
       }
       // managing computers from the dashboard. only from the server computer: the dashboard has
       // no login, and a student must not be able to hide or rename their own pc
@@ -326,7 +361,7 @@ bool core::start(std::string&err) {
     return false;
   }
   http_->start();
-  log(lvl::info,"Dashboard is served at http://"+(net_.net_ip.empty()?std::string("127.0.0.1"):net_.net_ip)+":"+std::to_string(http_port));
+  log(lvl::info,"Dashboard is served at https://"+(net_.net_ip.empty()?std::string("127.0.0.1"):net_.net_ip)+":"+std::to_string(http_port));
 
   run_=true;
   th_=std::thread([this]{loop();});
@@ -342,6 +377,7 @@ void core::loop() {
     try {
       std::string pl=b_snp(snp,removed(),n,*hist_).dump(-1,' ',false,json::error_handler_t::replace);
       std::lock_guard<std::mutex> lock(mu_);
+      snap_=pl;
       for (const auto&c:wsr_->getClients()) if (dash_.count(c.get())) c->send(pl);
     } catch (const json::exception&e) {
       log(lvl::err,std::string("JSON EXCEPTION ERROR: ")+e.what());
@@ -445,6 +481,8 @@ void core::save_meta() {
   }
   if (!replace_file(tmp,p)) log(lvl::err,"Cannot replace "+p);
 }
+
+std::string core::pin() const {std::lock_guard<std::mutex> lock(mu_); return tls_.fp.empty()?std::string():fp_pin(tls_.fp);}
 
 netif core::net() const {std::lock_guard<std::mutex> lock(mu_); return net_;}
 
