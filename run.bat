@@ -17,6 +17,8 @@ where ninja >nul 2>nul || (echo Ninja is not installed. Install it with: winget 
 rem Ninja instead of CMake's default generator (NMake / Visual Studio). A build\ folder set up
 rem with another generator is switched in place: only CMake's own cache is removed, so
 rem layout.json and machines.json saved next to the server are kept.
+rem Setup runs whenever build.ninja is missing, so a setup that failed earlier (for example
+rem no compiler found) is tried again instead of building from nothing.
 set "GEN="
 if exist build\CMakeCache.txt for /f "tokens=2 delims==" %%g in ('findstr /b /c:"CMAKE_GENERATOR:INTERNAL=" build\CMakeCache.txt') do set "GEN=%%g"
 if exist build\CMakeCache.txt if /i not "%GEN%"=="Ninja" (
@@ -24,7 +26,7 @@ if exist build\CMakeCache.txt if /i not "%GEN%"=="Ninja" (
   del /q build\CMakeCache.txt
   if exist build\CMakeFiles rmdir /s /q build\CMakeFiles
 )
-if not exist build\CMakeCache.txt (
+if not exist build\build.ninja (
   cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release || (echo CMake could not set up the build. If it found no C++ compiler: add MinGW g++ to PATH, or run this from the x64 Native Tools Command Prompt for VS. & exit /b 1)
 )
 cmake --build build --target server agent || exit /b 1
