@@ -38,7 +38,7 @@ rem /d: copy only when newer, so a map saved from the dashboard editor is kept
 if exist layout.json xcopy /d /y /q layout.json "%BIN%\" >nul
 
 start "Computer Inspector server" "%BIN%\server.exe"
-if /i "%~1"=="--agent" start "Computer Inspector agent" "%BIN%\agent.exe" --host 127.0.0.1 --pin-file "%BIN%\server.crt"
+if /i "%~1"=="--agent" start "Computer Inspector agent" "%BIN%\agent.exe" --host 127.0.0.1 --pin-file "%BIN%\server.crt" --join-key-file "%BIN%\agents.json"
 timeout /t 2 /nobreak >nul
 start "" https://127.0.0.1:8081
 echo Running. The browser warns about the certificate the first time: it is this server's own, accept it once.

@@ -67,7 +67,10 @@ add_executable(agent
   agent/main.cpp
   agent/metric.cpp
   agent/pin.cpp
+  agent/keystore.cpp
   common/tlspin.cpp
+  common/keys.cpp
+  common/exedir.cpp
   ${AGENT_PLATFORM}
 )
 target_link_libraries(agent PRIVATE ixwebsocket ${MBEDTLS_LIBS})
@@ -81,9 +84,11 @@ add_executable(server
   server/main.cpp
   server/core.cpp
   server/history.cpp
-  server/exedir.cpp
+  common/exedir.cpp
   server/tlscert.cpp
+  server/agentkeys.cpp
   common/tlspin.cpp
+  common/keys.cpp
   ${SERVER_PLATFORM}
 )
 target_link_libraries(server PRIVATE ixwebsocket ${MBEDTLS_LIBS})
@@ -156,9 +161,11 @@ if (SERVER_GUI)
     server/gui/main.cpp
     server/core.cpp
     server/history.cpp
-    server/exedir.cpp
+    common/exedir.cpp
     server/tlscert.cpp
+    server/agentkeys.cpp
     common/tlspin.cpp
+    common/keys.cpp
     ${SERVER_PLATFORM}
     ${FONT_CPP}
     ${imgui_SOURCE_DIR}/imgui.cpp

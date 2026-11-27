@@ -23,6 +23,11 @@ int main(int argc,char*argv[]) {
     }
     else if (a=="--history-dir"&&i+1<argc) srv.hist.dir=argv[++i];
     else if (a=="--no-history-files") srv.hist.dir.clear();
+    else if ((a=="--rotate-hours"||a=="--rotate-minutes")&&i+1<argc) {
+      // how old a pc's key may get before it is replaced (default 24 hours; 0 = never)
+      try {int v=std::stoi(argv[++i]); if (v>=0) srv.rotate_ms=(int64_t)v*(a=="--rotate-hours"?3600000:60000);}
+      catch (const std::exception&) {std::cerr<<a<<" needs a number, using 24 hours\n";}
+    }
   }
   ix::initNetSystem();
   std::cout<<std::string(40,'=')<<"\nSERVER LOG\n";

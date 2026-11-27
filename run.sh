@@ -50,8 +50,8 @@ if ! kill -0 "$PIDS" 2>/dev/null; then
 fi
 
 if [ "$AGENT" = 1 ]; then
-  # same pc as the server: the pin comes from the server's certificate file
-  ./build/agent --host 127.0.0.1 --pin-file build/server.crt >/dev/null 2>&1 &
+  # same pc as the server: the pin and the join key come from the server's own files
+  ./build/agent --host 127.0.0.1 --pin-file build/server.crt --join-key-file build/agents.json >/dev/null 2>&1 &
   PIDS="$PIDS $!"
 fi
 

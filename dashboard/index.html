@@ -486,6 +486,7 @@
         <p class="err" id="merr" role="alert"></p>
         <div class="acts">
           <button type="button" class="btn danger" id="mrm"></button>
+          <button type="button" class="btn danger" id="mrv"></button>
           <span class="grow"></span>
           <button type="button" class="btn" id="mcancel"></button>
           <button type="submit" class="btn primary" id="msave"></button>
@@ -518,6 +519,10 @@
       down: "รับ", up: "ส่ง", noData: d => `ไม่ได้รับข้อมูลมา ${d}`,
       unit: { s: "วินาที", m: "นาที", h: "ชั่วโมง", d: () => "วัน" },
       removeBtn: "เอาออกจากแดชบอร์ด", rmTitle: id => `เอา ${id} ออกจากแดชบอร์ด?`,
+      revokeBtn: "ยกเลิกคีย์", rvTitle: id => `ยกเลิกคีย์ของ ${id}?`,
+      rvBody: "เครื่องนี้จะถูกตัดการเชื่อมต่อทันที และต้องเข้าร่วมใหม่ด้วยคีย์สำหรับเข้าร่วม (agent --join-key …) ใช้เมื่อเครื่องถูกติดตั้งใหม่ หรือคีย์ของเครื่องอาจรั่วไหล",
+      rvYes: "ยกเลิกคีย์", rvDone: id => `ยกเลิกคีย์ของ ${id} แล้ว เครื่องนี้ต้องเข้าร่วมใหม่ด้วยคีย์สำหรับเข้าร่วม`,
+      rvFail: id => `ยกเลิกคีย์ของ ${id} ไม่สำเร็จ (เครื่องนี้อาจยังไม่ได้เข้าร่วม)`,
       rmBody: "เครื่องนี้จะถูกซ่อน และเซิร์ฟเวอร์จะไม่รับข้อมูลจากเครื่องนี้จนกว่าจะกด เพิ่มกลับ ใน แสดงเครื่องที่เอาออก ด้านล่างของหน้านี้ ประวัติของเครื่องยังเก็บไว้",
       rmYes: "เอาออก", rmNo: "ยกเลิก",
       rmDone: id => `เอา ${id} ออกแล้ว เพิ่มกลับได้ด้วยปุ่ม เพิ่มกลับ ตรงนี้ หรือใน แสดงเครื่องที่เอาออก ด้านล่างของหน้า`,
@@ -569,6 +574,10 @@
       down: "Down", up: "Up", noData: d => `No data for ${d}`,
       unit: { s: "s", m: "min", h: "h", d: n => n === 1 ? "day" : "days" },
       removeBtn: "Remove from dashboard", rmTitle: id => `Remove ${id} from the dashboard?`,
+      revokeBtn: "Revoke key", rvTitle: id => `Revoke ${id}'s key?`,
+      rvBody: "It is disconnected now and must join again with the join key (agent --join-key …). Use this when the PC was reinstalled, or its key may have leaked.",
+      rvYes: "Revoke key", rvDone: id => `${id}'s key was revoked. It must join again with the join key.`,
+      rvFail: id => `Could not revoke ${id}'s key (it may not have joined)`,
       rmBody: "It is hidden, and the server ignores its data, until you press Add back under Show removed computers at the bottom of this page. Its history is kept.",
       rmYes: "Remove", rmNo: "Cancel",
       rmDone: id => `${id} was removed. To add it back, press Add back here, or under Show removed computers at the bottom of the page.`,
@@ -634,6 +643,7 @@
   let layoutNote = null;        // key of the note to show about layout.json
   let mapMsg = null;            // short "saved" message next to the edit button
   let notice = null;            // {key, id, bad, act} shown under the status strip after remove / add back
+  let joinKey = "";             // join key, same rule as the pin
   let pin = "";                 // agent pin, only told to a browser on the server computer
   let can = false;              // this browser may manage computers (it is on the server computer)
   const nm = m => m.name || m.id;
@@ -1252,6 +1262,7 @@
     $("mnameh").textContent = T.mNameHint;
     $("mdescl").textContent = T.mDesc;
     $("mrm").textContent = T.removeBtn;
+    $("mrv").textContent = T.revokeBtn;
     $("mcancel").textContent = T.mCancel;
     $("msave").textContent = T.mSave;
     $("mname").value = m.name || "";
@@ -1298,6 +1309,17 @@
     } else notice = { key: "rmFail", id: label, bad: true };
     render();
     $(notice.act ? "noticea" : "noticex").focus();
+  }
+  async function revokeKey(id) {
+    const T = t();
+    closeEdit(false);
+    const m = lastDt && lastDt.machines.find(x => x.id === id), label = m ? nm(m) : id;
+    const ok = await ask({ title: T.rvTitle(label), body: T.rvBody, yes: T.rvYes, no: T.mCancel, back: () => editBtnOf(id) });
+    if (!ok) return;
+    const r = await post("/revoke", { id });
+    notice = r.ok ? { key: "rvDone", id: label } : { key: "rvFail", id: label, bad: true };
+    render();
+    $("noticex").focus();
   }
   async function restoreMachine(id) {
     const r = await post("/restore", { id });
@@ -1395,7 +1417,7 @@
       $("grid").hidden = false; $("map").hidden = true;
       const host = location.hostname || "<server-ip>";
       setHTML($("grid"), `<div class="empty" style="grid-column:1/-1"><h2>${esc(T.empty)}</h2>
-        <p>${esc(T.emptyHint)}</p><code>./agent --host ${esc(host)} --pin ${esc(pin || "<pin>")}</code></div>`);
+        <p>${esc(T.emptyHint)}</p><code>./agent --host ${esc(host)} --pin ${esc(pin || "<pin>")} --join-key ${esc(joinKey || "<join key>")}</code></div>`);
       return;
     }
     if (mapOn) setHTML($("map"), layout ? renderMap(ms)
@@ -1433,6 +1455,7 @@
   $("mform").addEventListener("submit", e => { e.preventDefault(); saveEdit(); });
   $("mcancel").addEventListener("click", () => closeEdit(true));
   $("mrm").addEventListener("click", () => { if (mId) removeMachine(mId); });
+  $("mrv").addEventListener("click", () => { if (mId) revokeKey(mId); });
   $("mdlg").addEventListener("cancel", e => { e.preventDefault(); closeEdit(true); });
   $("mdlg").addEventListener("click", e => {
     const r = $("mdlg").getBoundingClientRect();
@@ -1460,6 +1483,7 @@
   fetch("/me", { cache: "no-store" }).then(r => r.json()).then(j => {
     can = j && j.local === true;
     pin = j && typeof j.pin === "string" ? j.pin : "";
+    joinKey = j && typeof j.join_key === "string" ? j.join_key : "";
     render();
   }).catch(() => {});
   </script>

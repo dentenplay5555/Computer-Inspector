@@ -85,9 +85,11 @@ To fill the dashboard without real PCs, start virtual agents in a second termina
 ./test.sh -n 30 --all-normal
 ```
 
-They send the same JSON as the real agent, over TLS with the same pin check, and
+They send the same JSON as the real agent, over TLS with the same pin check, join and
+sign in like it (keys in `build/virtual_agents.keys.json`), follow key rotation, and
 reconnect if the server restarts. On the server PC they read the pin from
-`build/server.crt`; for a server elsewhere add `--host <ip> --pin <pin>`.
+`build/server.crt` and the join key from `build/agents.json`; for a server elsewhere add
+`--host <ip> --pin <pin> --join-key <key>`.
 `./test.sh --help` lists all options (needs Python 3, no extra packages).
 
 ## Build
@@ -138,6 +140,41 @@ reads the pin from the certificate (`run.sh --agent` and `run.bat --agent` do th
 The browser warns the first time, because the certificate is the server's own and not from
 a public authority: accept it once per browser, or install `server.crt` as trusted on the
 teacher PCs. The dashboard only talks to port 8081, so it is one exception.
+
+## Joining and keys
+
+Only PCs that joined may send data. The server keeps who may join and each PC's key in
+`agents.json` next to the server executable (secret: owner-only on Mac / Linux).
+
+1. **Join key.** The server window and log show it (e.g. `5Y7X-J9FB-AZBX-THN9-W6JB-53TU-AZ`).
+   Run each new PC once with it:
+
+   ```
+   ./agent --host 192.168.1.10 --pin 40d9-… --join-key 5Y7X-J9FB-…
+   ```
+
+   The PC then gets **its own key**, saved in `agent.key` next to the agent (owner-only on
+   Mac / Linux; `--key-file` to put it elsewhere). From then on `--join-key` is not needed.
+   **New join key** in the server window replaces it; PCs that already joined keep working.
+2. **Signing in.** On every connection the server sends a random number, and the agent
+   answers with a signature made from its key (HMAC-SHA256). Keys are never sent to prove
+   anything, and metrics only count after signing in, under the ID the PC signed in as
+   (whatever the message says), so one PC cannot send data as another.
+3. **Rotation.** When a PC's key is older than 24 hours and it is online, the server sends
+   it a new one. The agent saves it (whole file or nothing), then proves it has it; only
+   then does the server drop the old key. If anything breaks in between (crash, power
+   cut), either key still works and the rotation finishes on the next connection. A PC that
+   was off for a week rotates as soon as it is back. `server --rotate-hours N` changes the
+   interval (`0` = never).
+4. **Revoking.** **Revoke key** in a computer's edit pop-up on the dashboard (server PC
+   only, for now) disconnects it and forgets its key; it must join again with the join
+   key. Use it when a PC is reinstalled or its key may have leaked.
+
+The join key alone cannot take over a PC that already joined: a second join with the same
+ID is refused until that ID's key is revoked. The agent stops with a clear message (exit
+code 3) when the server refuses it for good: wrong join key, ID already joined, key revoked.
+On the server PC, `--join-key-file build/agents.json` reads the join key from the server's
+file (`run.sh --agent` and `run.bat --agent` do this, like `--pin-file`).
 
 ## History and abnormal usage
 

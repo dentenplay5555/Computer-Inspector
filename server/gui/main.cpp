@@ -250,14 +250,36 @@ static void draw_connect(app&a,const pal&p) {
     std::string dash="https://"+ip+":"+std::to_string(a.srv.http_port);
     float avail=ImGui::GetContentRegionAvail().x;
     bool two=avail>760*a.scale;
+    // join key: copy, or replace with a new one (asked first)
+    static bool ask_new_join=false;
+    auto join_row=[&]{
+      address_row(a,p,S_JOIN_KEY,S_JOIN_KEY_HINT,"join",a.srv.join_key(),false);
+      ImGui::SameLine();
+      if (ImGui::Button((std::string(T(a,S_NEW_JOIN))+"###newjoin_btn").c_str())) ask_new_join=true;
+    };
     if (two && ImGui::BeginTable("addr",2,ImGuiTableFlags_SizingStretchSame)) {
       ImGui::TableNextColumn(); address_row(a,p,S_AGENT_ADDR,S_AGENT_ADDR_HINT,"agent",agent,false);
       ImGui::TableNextColumn(); address_row(a,p,S_DASH_ADDR,S_DASH_ADDR_HINT,"dash",dash,true);
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn(); ImGui::Spacing(); join_row();
       ImGui::EndTable();
     } else {
       address_row(a,p,S_AGENT_ADDR,S_AGENT_ADDR_HINT,"agent",agent,false);
       ImGui::Spacing();
       address_row(a,p,S_DASH_ADDR,S_DASH_ADDR_HINT,"dash",dash,true);
+      ImGui::Spacing();
+      join_row();
+    }
+    if (ask_new_join) {ImGui::OpenPopup("###newjoin"); ask_new_join=false;}
+    if (ImGui::BeginPopupModal((std::string(T(a,S_NEW_JOIN_Q))+"###newjoin").c_str(),nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
+      ImGui::PushTextWrapPos(420*a.scale);
+      ImGui::TextUnformatted(T(a,S_NEW_JOIN_BODY));
+      ImGui::PopTextWrapPos();
+      ImGui::Spacing();
+      if (ImGui::Button((std::string(T(a,S_CANCEL))+"###nj_no").c_str())) ImGui::CloseCurrentPopup();
+      ImGui::SameLine();
+      if (primary_button(p,(std::string(T(a,S_NEW_JOIN))+"###nj_yes").c_str())) {a.srv.new_join_key(); ImGui::CloseCurrentPopup();}
+      ImGui::EndPopup();
     }
   }
   ImGui::EndChild();
@@ -334,7 +356,7 @@ static void draw_machines(app&a,const pal&p,float height) {
 #else
       "./agent"
 #endif
-      )+" --host "+(n.net_ip.empty()?"127.0.0.1":n.net_ip)+" --pin "+a.srv.pin();
+      )+" --host "+(n.net_ip.empty()?"127.0.0.1":n.net_ip)+" --pin "+a.srv.pin()+" --join-key "+a.srv.join_key();
     ImGui::PushFont(a.title);
     centered_note(p,cmd.c_str(),p.accent);
     ImGui::PopFont();

@@ -14,6 +14,7 @@ enum sid {
   S_SEC_AGO, S_MIN_AGO, S_HOUR_AGO, S_DAY_AGO, S_DAYS_AGO,
   S_EMPTY, S_EMPTY_HINT, S_NO_MATCH, S_WAIT_START, S_FAILED_TABLE,
   S_LOG, S_CLEAR, S_LOG_EMPTY,
+  S_JOIN_KEY, S_JOIN_KEY_HINT, S_NEW_JOIN, S_NEW_JOIN_Q, S_NEW_JOIN_BODY, S_CANCEL,
   S_COUNT
 };
 inline const char* const STR[2][S_COUNT] = {
@@ -31,6 +32,9 @@ inline const char* const STR[2][S_COUNT] = {
     "ยังไม่มีเครื่องเชื่อมต่อ", "รันคำสั่งนี้บนเครื่องนักเรียนแต่ละเครื่อง:", "ไม่พบเครื่องที่ตรงกับ \"%s\"",
     "รอเซิร์ฟเวอร์เริ่มทำงาน...", "เซิร์ฟเวอร์ยังไม่ทำงาน จึงยังรับข้อมูลจากเครื่องนักเรียนไม่ได้",
     "บันทึกเซิร์ฟเวอร์", "ล้าง", "ยังไม่มีบันทึก",
+    "คีย์สำหรับเข้าร่วม", "ใช้ครั้งแรกบนเครื่องนักเรียนแต่ละเครื่อง (--join-key) แล้วแต่ละเครื่องจะได้คีย์ของตัวเอง",
+    "สร้างคีย์ใหม่", "สร้างคีย์สำหรับเข้าร่วมใหม่?",
+    "เครื่องที่เข้าร่วมแล้วยังใช้งานได้ตามปกติ เครื่องใหม่ต้องใช้คีย์ใหม่ และคีย์เดิมจะใช้ไม่ได้อีก", "ยกเลิก",
   },
   { // english
     "Computer Inspector", "Classroom server",
@@ -46,5 +50,8 @@ inline const char* const STR[2][S_COUNT] = {
     "No computers have connected yet", "Run this on each student PC:", "No computer matches \"%s\"",
     "Waiting for the server to start...", "The server is not running, so it cannot receive data from student PCs.",
     "Server log", "Clear", "Nothing logged yet",
+    "Join key", "Used once on each new student PC (--join-key); each PC then gets its own key",
+    "New join key", "Make a new join key?",
+    "PCs that already joined keep working. New PCs need the new key, and the old one stops working.", "Cancel",
   },
 };

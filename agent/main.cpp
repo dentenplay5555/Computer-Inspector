@@ -9,8 +9,13 @@
 #include <ixwebsocket/IXWebSocket.h>
 #include "metric.hpp"
 #include "pin.hpp"
+#include "keystore.hpp"
 #include "common/tlspin.hpp"
+#include "common/keys.hpp"
+#include "common/exedir.hpp"
 #include <ixwebsocket/IXSocketTLSOptions.h>
+#include <fstream>
+#include <mutex>
 #include <string>
 #include <stdexcept>
 #ifdef _WIN32
@@ -22,6 +27,7 @@
 #endif
 using json=nlohmann::json;
 std::atomic<bool> r{1};
+std::atomic<bool> refused{false};   // the server said no for good: exit with an error
 void hde(int) {r=0;}
 int main(int argc, char *argv[]) {
   char hn[200+200];
@@ -31,11 +37,12 @@ int main(int argc, char *argv[]) {
   int stau=ghn(hn,sizeof(hn));
   if (stau!=0) std::strcpy(hn, "unknown");
   std::signal(SIGINT, hde);
-  std::string id=hn,port="8080",host="127.0.0.1",surl,pin;
+  std::string id=hn,port="8080",host="127.0.0.1",surl,pin,joinkey,keyfile=exe_dir()+"/agent.key";
+  bool id_given=false;
   for (int i=1;i<argc;i++) {
     if (std::string(argv[i])=="--server"&&i+1<argc) surl=argv[++i];
     else if (std::string(argv[i])=="--id"&&i+1<argc) {
-      if (std::strlen(argv[i+1])<=100)id=argv[++i];
+      if (std::strlen(argv[i+1])<=100) {id=argv[++i]; id_given=true;}
       else std::cerr<<"id too long using "<<id<<" as id\n";
     }
     else if (std::string(argv[i])=="--port"&&i+1<argc) {
@@ -50,6 +57,18 @@ int main(int argc, char *argv[]) {
     }
     else if (std::string(argv[i])=="--host"&&i+1<argc) host=argv[++i];
     else if (std::string(argv[i])=="--pin"&&i+1<argc) pin=argv[++i];
+    else if (std::string(argv[i])=="--join-key"&&i+1<argc) joinkey=argv[++i];
+    else if (std::string(argv[i])=="--join-key-file"&&i+1<argc) {
+      // on the server pc itself: the join key from the server's agents.json
+      std::ifstream f(argv[++i]);
+      json jf=json::parse(f,nullptr,false);
+      if (jf.is_discarded()||!jf.is_object()||!jf.contains("join_key")||!jf["join_key"].is_string()) {
+        std::cerr<<"Error: no join key in "<<argv[i]<<'\n';
+        return 2;
+      }
+      joinkey=jf["join_key"].get<std::string>();
+    }
+    else if (std::string(argv[i])=="--key-file"&&i+1<argc) keyfile=argv[++i];
     else if (std::string(argv[i])=="--pin-file"&&i+1<argc) {
       // on the server pc itself: take the pin from the server's certificate file
       std::string err;
@@ -61,6 +80,22 @@ int main(int argc, char *argv[]) {
     std::cerr<<"Error: --pin is missing. Copy it from the server window or the server log\n"
                "       (\"Agent pin: ...\"), e.g. agent --host 192.168.1.10 --pin 3fa2-91bc-...\n"
                "       On the server pc itself, --pin-file <folder of the server>/server.crt also works.\n";
+    return 2;
+  }
+  // this pc's own key, if it joined this server before (same pin)
+  stored_key sk;
+  bool have_key=load_key(keyfile,sk)&&same_pin(sk.pin,pin);
+  if (have_key&&sk.id!=id) {
+    if (id_given) {
+      std::cerr<<"Error: this pc joined as "<<sk.id<<", not "<<id<<". Drop --id, or ask the teacher to\n"
+                 "       revoke "<<sk.id<<"'s key and join again with --join-key.\n";
+      return 2;
+    }
+    id=sk.id;                            // the key belongs to that id
+  }
+  if (!have_key&&joinkey.empty()) {
+    std::cerr<<"Error: this pc has not joined the server yet. Run it once with --join-key <key>\n"
+               "       (the join key is in the server window and the server log).\n";
     return 2;
   }
   std::string url=surl.empty() ? "wss://"+host+":"+port+"/agent" : surl;
@@ -88,14 +123,65 @@ int main(int argc, char *argv[]) {
   ws.setTLSOptions(tlso);
   ws.setUrl(url);
   ws.setPingInterval(10);
-  ws.setOnMessageCallback([](const ix::WebSocketMessagePtr& msg){
+  // signing in (see README "Joining and keys"): the server says hello with a random nonce,
+  // the agent answers with a signature, and metrics only count after "ok" / "welcome"
+  std::atomic<bool> authed{false};
+  std::mutex km;                         // guards sk, have_key, nonce
+  std::string nonce;
+  if (!have_key) sk={pin,id,""};
+  ws.setOnMessageCallback([&](const ix::WebSocketMessagePtr& msg){
     switch (msg->type) {
       case ix::WebSocketMessageType::Open: 
-        std::cout<<"initialized Web socket\n";
+        std::cout<<"Connected, signing in...\n";
         break;
       case ix::WebSocketMessageType::Close: 
-        std::cout<<"Disconnecting...\n"; 
+        authed=false;
+        std::cout<<"Disconnected\n"; 
         break;
+      case ix::WebSocketMessageType::Message: {
+        json m=json::parse(msg->str,nullptr,false);
+        if (m.is_discarded()||!m.is_object()) break;
+        std::string type=m.value("type","");
+        std::lock_guard<std::mutex> lock(km);
+        if (type=="hello") {
+          nonce=m.value("nonce","");
+          if (have_key) ws.send(json{{"type","auth"},{"id",id},{"sig",hmac_hex(sk.key,msg_auth(nonce,id))}}.dump());
+          else ws.send(json{{"type","join"},{"id",id},{"proof",hmac_hex(norm_join_key(joinkey),msg_join(nonce,id))}}.dump());
+        } else if (type=="welcome") {
+          sk={pin,id,m.value("key","")};
+          have_key=true;
+          if (!save_key(keyfile,sk)) std::cerr<<"Error: joined, but cannot save the key to "<<keyfile<<"; the next start will fail\n";
+          else std::cout<<"Joined. This pc's own key is saved in "<<keyfile<<" (--join-key is no longer needed)\n";
+          authed=true;
+        } else if (type=="ok") {
+          authed=true;
+          std::cout<<"Signed in as "<<id<<'\n';
+        } else if (type=="rekey") {
+          // save first, then confirm: until the server sees the confirmation it keeps the old key
+          stored_key nk{pin,id,m.value("key","")};
+          if (nk.key.empty()||!save_key(keyfile,nk)) {std::cerr<<"Error: cannot save the new key to "<<keyfile<<"; keeping the old one\n"; break;}
+          sk=nk;
+          ws.send(json{{"type","rekeyed"},{"sig",hmac_hex(sk.key,msg_rekey(nonce,id))}}.dump());
+          std::cout<<"Key rotated\n";
+        } else if (type=="denied") {
+          authed=false;
+          std::string why=m.value("why","");
+          if (why=="not_joined"&&have_key&&!joinkey.empty()) {
+            std::cerr<<"The server does not know this pc's key (revoked?); joining again with --join-key\n";
+            have_key=false;
+            ws.send(json{{"type","join"},{"id",id},{"proof",hmac_hex(norm_join_key(joinkey),msg_join(nonce,id))}}.dump());
+          } else {
+            if (why=="not_joined") std::cerr<<"Error: the server does not know this pc (its key was revoked, or the server was reset). Run with --join-key <key> to join again.\n";
+            else if (why=="bad_join_key") std::cerr<<"Error: the join key is wrong. Copy it again from the server window.\n";
+            else if (why=="already_joined") std::cerr<<"Error: "<<id<<" already joined. If this pc was reinstalled, ask the teacher to revoke "<<id<<"'s key, then join again.\n";
+            else if (why=="bad_key") std::cerr<<"Error: the server rejected this pc's key. Ask the teacher to revoke "<<id<<"'s key, then join again with --join-key.\n";
+            else std::cerr<<"Error: the server refused this agent ("<<why<<")\n";
+            refused=true;
+            r=0;
+          }
+        }
+        break;
+      }
       case ix::WebSocketMessageType::Error: 
         std::cerr<<"An error has occur: "<<msg->errorInfo.reason<<'\n'; 
         break;
@@ -108,6 +194,7 @@ int main(int argc, char *argv[]) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
     if (!r) break;
     stats rev=cor.st();
+    if (!authed) continue;                // nothing counts before signing in
     auto ms=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count(); 
     json j; 
     j=rev;
@@ -124,5 +211,5 @@ int main(int argc, char *argv[]) {
   std::cerr<<"Stopping agent...\n";
   ws.stop();
   ix::uninitNetSystem();
-  return 0;
+  return refused?3:0;
 }

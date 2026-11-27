@@ -8,8 +8,9 @@
 #include <ixwebsocket/IXWebSocketServer.h>
 #include <ixwebsocket/IXHttpServer.h>
 #include "agent/json.hpp"
-#include "exedir.hpp"
+#include "common/exedir.hpp"
 #include "common/tlspin.hpp"
+#include "common/keys.hpp"
 #include <ixwebsocket/IXSocketTLSOptions.h>
 using json=nlohmann::json;
 
@@ -136,13 +137,15 @@ core::~core() {stop();}
 
 void core::log(lvl l,const std::string&s) {if (on_log) on_log(l,s);}
 
-void core::hmsg(const std::string&ip,const std::string&txt) {
+// metrics from a signed-in agent connection; id is the one it signed in as, whatever the
+// message says, so a pc cannot send data in another pc's name
+void core::hmsg(const std::string&ip,const std::string&aid,const std::string&txt) {
   try {
     json j=json::parse(txt,nullptr,false);
     if (j==nlohmann::json::value_t::discarded)return;
     if (!j.is_object())return;
     if (j.value("type","")!="metrics")return;
-    std::string id=j.value("id","");
+    std::string id=aid;
     if (id.empty()) return;
     double cpu=j.value("cpu",0.0),ram=0;
     if (j.contains("ram")&&j["ram"].is_object())ram=j["ram"].value("per",0.0);
@@ -175,6 +178,14 @@ void core::hmsg(const std::string&ip,const std::string&txt) {
 bool core::start(std::string&err) {
   if (run_) return true;
   if (!meta_loaded_) {load_meta(); meta_loaded_=true;}
+  static bool tls_ok=tls_global_init();      // also feeds the random numbers for keys
+  if (!keys_) {
+    auto k=std::make_unique<agent_keys>(exe_dir()+"/agents.json");
+    k->rotate_ms=rotate_ms;
+    if (!tls_ok||!k->load(err)) {err="agent keys: "+(tls_ok?err:std::string("no random numbers")); log(lvl::err,err); return false;}
+    keys_=std::move(k);
+  }
+  log(lvl::info,"Join key for new agents: "+keys_->join_key()+"  (agent --join-key ...; each pc then gets its own key)");
   if (!hist_) {
     hist_=std::make_unique<history>(hist);
     size_t pts=hist_->load();
@@ -212,12 +223,13 @@ bool core::start(std::string&err) {
       case ix::WebSocketMessageType::Open: {
         bool d=msg->openInfo.uri=="/dashboard";
         if (d) {std::lock_guard<std::mutex> lock(mu_); dash_.insert(&ws);}
+        else agent_open(ws);
         log(lvl::info,std::string(d?"dashboard":"agent")+" connected: "+state->getRemoteIp());
         break;
       }
       case ix::WebSocketMessageType::Close: {
         bool d;
-        {std::lock_guard<std::mutex> lock(mu_); d=dash_.erase(&ws)>0;}
+        {std::lock_guard<std::mutex> lock(mu_); d=dash_.erase(&ws)>0; conns_.erase(&ws);}
         log(lvl::info,std::string(d?"dashboard":"agent")+" disconnected: "+state->getRemoteIp());
         break;
       }
@@ -227,7 +239,7 @@ bool core::start(std::string&err) {
       case ix::WebSocketMessageType::Message: {
         bool is_d;
         {std::lock_guard<std::mutex> lock(mu_); is_d=dash_.count(&ws)>0;}
-        if (!is_d) hmsg(state->getRemoteIp(),msg->str);
+        if (!is_d) agent_msg(ws,state->getRemoteIp(),msg->str);
         break;
       }
       default: break;
@@ -265,12 +277,12 @@ bool core::start(std::string&err) {
         json me={{"local",loc}};
         // the pin only for a browser on this computer: elsewhere the page itself could have
         // come through someone in the middle, who would show their own pin
-        if (loc) me["pin"]=pin();
+        if (loc) {me["pin"]=pin(); me["join_key"]=join_key();}
         return std::make_shared<ix::HttpResponse>(200,"OK",ix::HttpErrorCode::Ok,head,me.dump());
       }
       // managing computers from the dashboard. only from the server computer: the dashboard has
       // no login, and a student must not be able to hide or rename their own pc
-      if ((rq->uri=="/forget"||rq->uri=="/restore"||rq->uri=="/meta")&&rq->method=="POST") {
+      if ((rq->uri=="/forget"||rq->uri=="/restore"||rq->uri=="/meta"||rq->uri=="/revoke")&&rq->method=="POST") {
         head["Content-Type"]="application/json";
         head["Cache-Control"]="no-store";
         auto reply=[&](int code,const char*msg,const json&body){
@@ -284,6 +296,7 @@ bool core::start(std::string&err) {
         std::string id=j["id"].get<std::string>(), why;
         if (rq->uri=="/forget") why=forget(id);
         else if (rq->uri=="/restore") why=restore(id);
+        else if (rq->uri=="/revoke") why=revoke_key(id)?"":"unknown";
         else {
           auto str=[&](const char*k){return j.contains(k)&&j[k].is_string()?j[k].get<std::string>():std::string();};
           why=set_meta(id,str("name"),str("desc"));
@@ -369,9 +382,31 @@ bool core::start(std::string&err) {
 }
 
 void core::loop() {
+  int tick=0;
   while (run_) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
     if (!run_) break;
+    {
+      // connections that did not sign in within 10 s (refused, or never tried)
+      std::vector<std::shared_ptr<ix::WebSocket>> late;
+      int64_t t=now_ms();
+      for (const auto&c:wsr_->getClients()) {
+        std::lock_guard<std::mutex> lock(mu_);
+        auto it=conns_.find(c.get());
+        if (it!=conns_.end()&&!it->second.authed&&t-it->second.opened>10000) late.push_back(c);
+      }
+      for (auto&w:late) w->close();
+    }
+    if (++tick%10==0) {
+      // keys that got old while their pc stayed connected
+      std::vector<std::pair<std::shared_ptr<ix::WebSocket>,std::string>> on;
+      for (const auto&c:wsr_->getClients()) {
+        std::lock_guard<std::mutex> lock(mu_);
+        auto it=conns_.find(c.get());
+        if (it!=conns_.end()&&it->second.authed&&!it->second.rekeying) on.push_back({c,it->second.id});
+      }
+      for (auto&[w,id]:on) offer_rotation(*w,id);
+    }
     std::vector<mah> snp=machines();
     int64_t n=now_ms();
     try {
@@ -480,6 +515,109 @@ void core::save_meta() {
     if (!f) {log(lvl::err,"Cannot write "+tmp);return;}
   }
   if (!replace_file(tmp,p)) log(lvl::err,"Cannot replace "+p);
+}
+
+// ---------- agent sign-in (see README "Joining and keys") ----------
+void core::agent_open(ix::WebSocket&ws) {
+  std::string nonce=rand_hex(16);
+  {std::lock_guard<std::mutex> lock(mu_); conns_[&ws]=conn{nonce,"",false,false,now_ms(),0};}
+  ws.send(json{{"type","hello"},{"nonce",nonce}}.dump());
+}
+
+void core::agent_msg(ix::WebSocket&ws,const std::string&ip,const std::string&txt) {
+  json j=json::parse(txt,nullptr,false);
+  if (j.is_discarded()||!j.is_object()) return;
+  std::string type=j.value("type","");
+  conn c;
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    auto it=conns_.find(&ws);
+    if (it==conns_.end()) return;
+    c=it->second;
+  }
+  auto str=[&](const char*k){return j.contains(k)&&j[k].is_string()?j[k].get<std::string>():std::string();};
+  if (c.authed) {
+    if (type=="metrics") hmsg(ip,c.id,txt);
+    else if (type=="rekeyed") {
+      bool ok=keys_->finish_rotation(c.id,c.nonce,str("sig"),now_ms());
+      {std::lock_guard<std::mutex> lock(mu_); auto it=conns_.find(&ws); if (it!=conns_.end()) it->second.rekeying=false;}
+      if (ok) log(lvl::info,"Key rotated: "+c.id);
+      else log(lvl::warn,"Key rotation for "+c.id+" was not confirmed; the old key stays valid and it is tried again");
+    }
+    return;
+  }
+  if (type!="join"&&type!="auth") return;     // nothing else counts before signing in
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    auto it=conns_.find(&ws);
+    if (it==conns_.end()||++it->second.tries>3) return;   // a few tries per connection
+  }
+  // the answer stays on the connection (closing at once could overtake it); the agent
+  // stops or joins again, and the tick thread closes connections still not signed in
+  auto deny=[&](const std::string&why,const std::string&what){
+    log(lvl::warn,what+" ("+ip+")");
+    ws.send(json{{"type","denied"},{"why",why}}.dump());
+  };
+  std::string id=str("id");
+  if (id.empty()||id.size()>100) return deny("bad_id","An agent without a valid id was refused");
+  std::string key;
+  if (type=="join") {
+    auto v=keys_->join(id,c.nonce,str("proof"),key);
+    if (v==agent_keys::verdict::already_joined)
+      return deny("already_joined",id+" tried to join again. If it is the same pc (reinstalled), revoke its key on the dashboard first");
+    if (v!=agent_keys::verdict::ok) return deny("bad_join_key",id+" tried to join with a wrong join key");
+    log(lvl::info,id+" joined and got its own key");
+  } else {
+    auto v=keys_->auth(id,c.nonce,str("sig"));
+    if (v==agent_keys::verdict::not_joined) return deny("not_joined",id+" is not joined (never joined, or its key was revoked)");
+    if (v!=agent_keys::verdict::ok) return deny("bad_key",id+" signed in with a wrong key");
+  }
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    auto it=conns_.find(&ws);
+    if (it==conns_.end()) return;
+    it->second.authed=true;
+    it->second.id=id;
+  }
+  if (type=="join") ws.send(json{{"type","welcome"},{"id",id},{"key",key}}.dump());
+  else ws.send(json{{"type","ok"},{"id",id}}.dump());
+  offer_rotation(ws,id);
+}
+
+void core::offer_rotation(ix::WebSocket&ws,const std::string&id) {
+  if (!keys_->rotation_due(id,now_ms())) return;
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    auto it=conns_.find(&ws);
+    if (it==conns_.end()||it->second.rekeying) return;
+    it->second.rekeying=true;
+  }
+  std::string k=keys_->start_rotation(id);
+  if (k.empty()) return;
+  ws.send(json{{"type","rekey"},{"key",k}}.dump());
+}
+
+std::string core::join_key() const {return keys_?keys_->join_key():std::string();}
+std::string core::new_join_key() {
+  if (!keys_) return std::string();
+  std::string k=keys_->new_join_key();
+  log(lvl::info,"New join key: "+k+" (the old one no longer works for new pcs)");
+  return k;
+}
+bool core::joined(const std::string&id) const {return keys_&&keys_->joined(id);}
+
+bool core::revoke_key(const std::string&id) {
+  if (!keys_||!keys_->revoke(id)) return false;
+  // disconnect it now; outside mu_, since closing calls back into the server
+  std::vector<std::shared_ptr<ix::WebSocket>> drop;
+  if (wsr_) for (const auto&c:wsr_->getClients()) {
+    std::lock_guard<std::mutex> lock(mu_);
+    auto it=conns_.find(c.get());
+    if (it!=conns_.end()&&it->second.id==id) drop.push_back(c);
+  }
+  for (auto&w:drop) w->close();
+  log(lvl::info,"Key of "+id+" revoked; it must join again with the join key");
+  return true;
 }
 
 std::string core::pin() const {std::lock_guard<std::mutex> lock(mu_); return tls_.fp.empty()?std::string():fp_pin(tls_.fp);}

@@ -15,89 +15,22 @@ Start the server first, with a learning period shorter than --jump-at, e.g.:
 
 Only the Python standard library is used (no internet needed).
 """
-import argparse, base64, hashlib, json, os, random, socket, ssl, struct, sys, threading, time
+import argparse, json, os, random, sys, threading, time
 
-# tls: the server only speaks wss://. like the real agent, trust exactly the certificate
-# whose sha-256 matches the pin (shown in the server window / log as "Agent pin: ...")
-TLS = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-TLS.check_hostname = False          # checked by the pin instead
-TLS.verify_mode = ssl.CERT_NONE
+# tls with the pin, the websocket client and signing in are shared with virtual_agents.py
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ciproto import WS, Agent, KeyStore, Refused, pin_from_args, join_key_from_args, BUILD
 
-def pin_of_der(der):
-    h = hashlib.sha256(der).hexdigest()
-    return "-".join(h[i:i + 4] for i in range(0, 32, 4))
-
-def pin_matches(pin, der):
-    p = "".join(c for c in pin.lower() if c not in "-: ")
-    return len(p) >= 32 and hashlib.sha256(der).hexdigest().startswith(p)
-
-def pin_from_args(pin, pin_file):
-    # --pin, else --pin-file, else the server's certificate in build/ (same pc as the server)
-    if pin:
-        return pin
-    path = pin_file or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "build", "server.crt")
-    try:
-        with open(path) as f:
-            return pin_of_der(ssl.PEM_cert_to_DER_cert(f.read()))
-    except OSError:
-        sys.exit(f"No --pin given and {path} not found. Copy the pin from the server window or log.")
-
-def tls_wrap(raw, host, pin):
-    s = TLS.wrap_socket(raw, server_hostname=host)
-    if not pin_matches(pin, s.getpeercert(binary_form=True)):
-        s.close()
-        # not an OSError on purpose: retrying will not help, stop and say why
-        raise SystemExit("The server's certificate does not match the pin (wrong pin, or not our server).")
-    return s
-
-def ws_connect(host, port, path, pin, wait_s=10):
+def ws_connect_retry(host, port, path, pin, wait_s=10):
     # retry while the server is still starting up
     deadline = time.time() + wait_s
     while True:
         try:
-            s = tls_wrap(socket.create_connection((host, port)), host, pin)
-            break
+            return WS(host, port, path, pin)
         except ConnectionRefusedError:
             if time.time() > deadline:
                 raise
             time.sleep(0.5)
-    key = base64.b64encode(os.urandom(16)).decode()
-    s.sendall((f"GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\n"
-               f"Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
-    resp = b""
-    while b"\r\n\r\n" not in resp:
-        chunk = s.recv(1)
-        if not chunk:
-            raise ConnectionError("server closed during handshake")
-        resp += chunk
-    if b" 101 " not in resp.split(b"\r\n")[0]:
-        raise ConnectionError(resp.split(b"\r\n")[0].decode())
-    return s
-
-def ws_send(s, text):
-    data, mask = text.encode(), os.urandom(4)
-    n = len(data)
-    head = bytes([0x81]) + (bytes([0x80 | n]) if n < 126 else bytes([0x80 | 126]) + struct.pack(">H", n))
-    s.sendall(head + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
-
-def recv_exact(s, n):
-    buf = b""
-    while len(buf) < n:
-        chunk = s.recv(n - len(buf))
-        if not chunk:
-            raise ConnectionError("closed")
-        buf += chunk
-    return buf
-
-def ws_recv(s):
-    b1, b2 = recv_exact(s, 2)
-    n = b2 & 0x7F
-    if n == 126:
-        n = struct.unpack(">H", recv_exact(s, 2))[0]
-    elif n == 127:
-        n = struct.unpack(">Q", recv_exact(s, 8))[0]
-    payload = recv_exact(s, n)
-    return b1 & 0x0F, payload
 
 def main():
     ap = argparse.ArgumentParser()
@@ -105,12 +38,18 @@ def main():
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument("--pin", help="the server's agent pin (default: read build/server.crt)")
     ap.add_argument("--pin-file", help="server.crt to take the pin from")
+    ap.add_argument("--join-key", help="the server's join key (default: read build/agents.json)")
+    ap.add_argument("--join-key-file", help="agents.json to take the join key from")
+    ap.add_argument("--key-file", default=os.path.join(BUILD, "baseline_test.keys.json"),
+                    help="where the test pcs keep their own keys")
     ap.add_argument("--jump-at", type=int, default=900, help="seconds of normal traffic before JUMP-C jumps")
     ap.add_argument("--after", type=int, default=120, help="seconds to keep sending after the jump")
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--out", default="baseline_results.json")
     a = ap.parse_args()
     pin = pin_from_args(a.pin, a.pin_file)
+    store = KeyStore(a.key_file, pin)
+    join_key = join_key_from_args(a.join_key, a.join_key_file)
     rnd = random.Random(a.seed)
 
     events = {"NORM-A": [], "NORM-B": [], "JUMP-C": []}   # (seconds since start, abn list)
@@ -119,11 +58,11 @@ def main():
     stop = threading.Event()
 
     def watch():
-        d = ws_connect(a.host, a.port, "/dashboard", pin)
+        d = ws_connect_retry(a.host, a.port, "/dashboard", pin)
         last = {}
         while not stop.is_set():
-            op, payload = ws_recv(d)
-            if op != 1:
+            payload = d.recv(1)
+            if payload is None:
                 continue
             snap = json.loads(payload)
             t = round(time.time() - start, 1)
@@ -139,7 +78,20 @@ def main():
                     last[mid] = abn
     threading.Thread(target=watch, daemon=True).start()
 
-    conns = {k: ws_connect(a.host, a.port, "/agent", pin) for k in events}
+    def agent(k, wait_s=10):
+        # retry while the server is still starting up
+        deadline = time.time() + wait_s
+        while True:
+            try:
+                return Agent(a.host, a.port, pin, k, store, join_key).connect()
+            except ConnectionRefusedError:
+                if time.time() > deadline:
+                    raise
+                time.sleep(0.5)
+    try:
+        conns = {k: agent(k) for k in events}
+    except Refused as e:
+        sys.exit(str(e))
     burst_left = 0
     total = a.jump_at + a.after
     sent = 0
@@ -157,9 +109,9 @@ def main():
                     burst_left -= 1
             if mid == "JUMP-C" and sec >= a.jump_at:
                 rx = max(0, rnd.gauss(2000, 150))
-            ws_send(c, json.dumps({"type": "metrics", "id": mid, "os": "test", "cpu": round(cpu, 1),
-                                   "ram": {"per": 40}, "disk": {"per": 50},
-                                   "net": {"rx_kbps": round(rx, 1), "tx_kbps": round(tx, 1)}}))
+            c.send({"type": "metrics", "id": mid, "os": "test", "cpu": round(cpu, 1),
+                    "ram": {"per": 40}, "disk": {"per": 50},
+                    "net": {"rx_kbps": round(rx, 1), "tx_kbps": round(tx, 1)}})
             sent += 1
         time.sleep(max(0, tick + 1 - time.time()))
     time.sleep(2)

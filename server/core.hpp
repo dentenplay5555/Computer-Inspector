@@ -13,8 +13,9 @@
 #include "netinfo.hpp"
 #include "history.hpp"
 #include "tlscert.hpp"
+#include "agentkeys.hpp"
 
-namespace ix { class WebSocketServer; class HttpServer; }
+namespace ix { class WebSocketServer; class HttpServer; class WebSocket; }
 
 // latest numbers reported by one agent
 struct mah {
@@ -39,6 +40,8 @@ public:
   std::function<void(const std::vector<mah>&,int64_t)> on_tick;
   // history / baseline settings; read once, on the first start()
   hist_cfg hist;
+  // how old a pc's key may get before the server hands it a new one (it must be online)
+  int64_t rotate_ms=24LL*60*60*1000;
 
   core();
   ~core();
@@ -70,9 +73,24 @@ public:
   std::vector<std::string> abnormal(const std::string&id,int64_t now) const;
   bool learning(const std::string&id,int64_t now) const;
 
+  // joining: the key typed once on each new pc (empty before the first start())
+  std::string join_key() const;
+  std::string new_join_key();        // old one stops working for new pcs; joined pcs keep going
+  // forgets the pc's key and disconnects it: it must join again. false when it never joined.
+  bool revoke_key(const std::string&id);
+  bool joined(const std::string&id) const;
+
 private:
   void log(lvl l,const std::string&s);
-  void hmsg(const std::string&ip,const std::string&txt);
+  void hmsg(const std::string&ip,const std::string&id,const std::string&txt);
+  // an agent connection: hello / join / auth / rekey, then metrics (see README)
+  void agent_open(ix::WebSocket&ws);
+  void agent_msg(ix::WebSocket&ws,const std::string&ip,const std::string&txt);
+  void offer_rotation(ix::WebSocket&ws,const std::string&id);   // call without mu_
+  // tries: sign-in attempts on this connection; one that has not signed in after 10 s is closed
+  struct conn {std::string nonce,id; bool authed=false,rekeying=false; int64_t opened=0; int tries=0;};
+  std::map<const void*,conn> conns_;  // agent connections, guarded by mu_
+  std::unique_ptr<agent_keys> keys_;  // agents.json; has its own lock
   void loop();
 
   mutable std::mutex mu_;
