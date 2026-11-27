@@ -30,6 +30,7 @@ Status: `[x]` done, `[ ]` planned.
  
 - [x] Read CPU / RAM / network statistics (Linux)
 - [x] Read CPU / RAM / network statistics (Windows)
+- [x] Read CPU / RAM / network statistics (macOS)
 - [x] Send statistics to a central server over WebSocket
 - [x] Teacher dashboard: one card per computer (ok / warning / critical / offline), Thai / English, light / dark
 - [x] Server window (`server_gui`): server status, connect addresses, live machine table, log (Thai / English, light / dark)
