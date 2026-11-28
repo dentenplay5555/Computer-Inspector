@@ -14,6 +14,8 @@ enum sid {
   S_SEC_AGO, S_MIN_AGO, S_HOUR_AGO, S_DAY_AGO, S_DAYS_AGO,
   S_EMPTY, S_EMPTY_HINT, S_NO_MATCH, S_WAIT_START, S_FAILED_TABLE,
   S_LOG, S_CLEAR, S_LOG_EMPTY,
+  S_JOIN_KEY, S_JOIN_KEY_HINT, S_NEW_JOIN, S_NEW_JOIN_Q, S_NEW_JOIN_BODY, S_CANCEL,
+  S_PW_NOT_SET, S_PW_NEW, S_PW_AGAIN, S_PW_SET, S_PW_SHORT, S_PW_SAME, S_PW_DONE,
   S_COUNT
 };
 inline const char* const STR[2][S_COUNT] = {
@@ -22,7 +24,7 @@ inline const char* const STR[2][S_COUNT] = {
     "English", "โหมดมืด", "โหมดสว่าง",
     "กำลังเริ่มเซิร์ฟเวอร์...", "กำลังทำงาน", "เริ่มเซิร์ฟเวอร์ไม่สำเร็จ", "ลองอีกครั้ง",
     "เครือข่าย", "ไม่พบเครือข่าย IPv4 เครื่องอื่นจะเชื่อมต่อไม่ได้", "agent ที่เชื่อมต่อ", "แดชบอร์ดที่เปิด",
-    "ลิงก์สำหรับ agent", "ใส่ในคำสั่ง agent บนเครื่องนักเรียน", "แดชบอร์ดสำหรับครู", "เปิดได้จากเครื่องใดก็ได้ในวงแลนเดียวกัน",
+    "pin สำหรับ agent", "ใส่หลัง --pin ในคำสั่ง agent ของนักเรียนทุกเครื่อง", "แดชบอร์ดสำหรับครู", "เปิดได้จากเครื่องใดก็ได้ในวงแลนเดียวกัน",
     "คัดลอก", "คัดลอกแล้ว", "เปิดในเบราว์เซอร์",
     "เครื่องนักเรียน", "ค้นหาเครื่อง", "ชื่อเครื่องหรือ IP",
     "ปกติ", "เฝ้าระวัง", "วิกฤต", "ออฟไลน์",
@@ -31,13 +33,18 @@ inline const char* const STR[2][S_COUNT] = {
     "ยังไม่มีเครื่องเชื่อมต่อ", "รันคำสั่งนี้บนเครื่องนักเรียนแต่ละเครื่อง:", "ไม่พบเครื่องที่ตรงกับ \"%s\"",
     "รอเซิร์ฟเวอร์เริ่มทำงาน...", "เซิร์ฟเวอร์ยังไม่ทำงาน จึงยังรับข้อมูลจากเครื่องนักเรียนไม่ได้",
     "บันทึกเซิร์ฟเวอร์", "ล้าง", "ยังไม่มีบันทึก",
+    "คีย์สำหรับเข้าร่วม", "ใช้ครั้งแรกบนเครื่องนักเรียนแต่ละเครื่อง (--join-key) แล้วแต่ละเครื่องจะได้คีย์ของตัวเอง",
+    "สร้างคีย์ใหม่", "สร้างคีย์สำหรับเข้าร่วมใหม่?",
+    "เครื่องที่เข้าร่วมแล้วยังใช้งานได้ตามปกติ เครื่องใหม่ต้องใช้คีย์ใหม่ และคีย์เดิมจะใช้ไม่ได้อีก", "ยกเลิก",
+    "ยังไม่ได้ตั้งรหัสผ่านครู: ต้องตั้งก่อนจึงจะเปิดแดชบอร์ดได้", "รหัสผ่านใหม่", "พิมพ์อีกครั้ง", "ตั้งรหัสผ่าน",
+    "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร", "รหัสผ่านสองช่องไม่ตรงกัน", "ตั้งรหัสผ่านครูแล้ว",
   },
   { // english
     "Computer Inspector", "Classroom server",
     "ภาษาไทย", "Dark mode", "Light mode",
     "Starting the server...", "Running", "The server could not start", "Try again",
     "Network", "No IPv4 network found. Other PCs cannot reach this server.", "Agents connected", "Dashboards open",
-    "Address for agents", "Put this in the agent command on each student PC", "Teacher dashboard", "Opens from any PC on the same LAN",
+    "Agent pin", "Give it to every agent with --pin, so agents trust only this server", "Teacher dashboard", "Opens from any PC on the same LAN",
     "Copy", "Copied", "Open in browser",
     "Student computers", "Find a computer", "Name or IP",
     "Normal", "Watch", "Critical", "Offline",
@@ -46,5 +53,10 @@ inline const char* const STR[2][S_COUNT] = {
     "No computers have connected yet", "Run this on each student PC:", "No computer matches \"%s\"",
     "Waiting for the server to start...", "The server is not running, so it cannot receive data from student PCs.",
     "Server log", "Clear", "Nothing logged yet",
+    "Join key", "Used once on each new student PC (--join-key); each PC then gets its own key",
+    "New join key", "Make a new join key?",
+    "PCs that already joined keep working. New PCs need the new key, and the old one stops working.", "Cancel",
+    "No teacher password yet: set it to open the dashboard", "New password", "Type it again", "Set password",
+    "The password needs at least 8 characters", "The two passwords are not the same", "Teacher password set",
   },
 };

@@ -18,29 +18,11 @@ Everyone else sends normal noise. Use --all-normal to turn the special cases off
 
 Only the Python standard library is used. Ctrl+C stops all agents.
 """
-import argparse, base64, json, os, random, socket, struct, sys, time
+import argparse, json, os, random, sys, time
 
-def connect(host, port):
-    s = socket.create_connection((host, port), timeout=2)
-    key = base64.b64encode(os.urandom(16)).decode()
-    s.sendall((f"GET /agent HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\n"
-               f"Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
-    resp = b""
-    while b"\r\n\r\n" not in resp:
-        chunk = s.recv(1024)
-        if not chunk:
-            raise ConnectionError("closed during handshake")
-        resp += chunk
-    if b" 101 " not in resp.split(b"\r\n")[0]:
-        raise ConnectionError("handshake refused")
-    s.settimeout(None)
-    return s
-
-def send(s, text):
-    data, mask = text.encode(), os.urandom(4)
-    n = len(data)
-    head = bytes([0x81]) + (bytes([0x80 | n]) if n < 126 else bytes([0x80 | 126]) + struct.pack(">H", n))
-    s.sendall(head + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
+# tls with the pin, the websocket client and signing in are shared with baseline_test.py
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ciproto import Agent, KeyStore, Refused, pin_from_args, join_key_from_args, BUILD
 
 def seat_ids(n):
     out = []
@@ -54,12 +36,21 @@ def main():
     ap.add_argument("-n", "--count", type=int, default=12, help="number of agents (default 12)")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8080)
+    ap.add_argument("--pin", help="the server's agent pin (default: read build/server.crt)")
+    ap.add_argument("--pin-file", help="server.crt to take the pin from")
+    ap.add_argument("--join-key", help="the server's join key (default: read build/agents.json)")
+    ap.add_argument("--join-key-file", help="agents.json to take the join key from")
+    ap.add_argument("--key-file", default=os.path.join(BUILD, "virtual_agents.keys.json"),
+                    help="where the virtual pcs keep their own keys")
     ap.add_argument("--all-normal", action="store_true", help="no warning/critical/offline/jump agents")
     ap.add_argument("--offline-after", type=int, default=20, help="seconds before A-04 goes quiet")
     ap.add_argument("--jump-after", type=int, default=120, help="seconds before A-05 download jumps")
     ap.add_argument("--seconds", type=int, default=0, help="stop after this many seconds (0 = until Ctrl+C)")
     ap.add_argument("--seed", type=int, default=None)
     a = ap.parse_args()
+    pin = pin_from_args(a.pin, a.pin_file)
+    store = KeyStore(a.key_file, pin)
+    join_key = join_key_from_args(a.join_key, a.join_key_file)
     if not 1 <= a.count <= 200:
         sys.exit("--count must be between 1 and 200")
     rnd = random.Random(a.seed)
@@ -74,7 +65,7 @@ def main():
         role["LAB-X"] = "normal"
     os_of = {mid: ("windows" if k % 3 else "linux") for k, mid in enumerate(ids)}
 
-    print(f"Virtual agents -> ws://{a.host}:{a.port}/agent")
+    print(f"Virtual agents -> wss://{a.host}:{a.port}/agent (pin {pin})")
     specials = {mid: r for mid, r in role.items() if r != "normal"}
     print(f"  {len(ids)} agents: {', '.join(ids)}")
     if specials:
@@ -115,10 +106,12 @@ def main():
                        "disk": {"use_gb": 120.0, "tot_gb": 256.0, "per": 46.9}}
                 try:
                     if mid not in conns:
-                        conns[mid] = connect(a.host, a.port)
-                    send(conns[mid], json.dumps(msg))
+                        conns[mid] = Agent(a.host, a.port, pin, mid, store, join_key).connect()
+                    conns[mid].send(msg)
                     warned = False
-                except OSError:
+                except Refused as e:
+                    sys.exit(str(e))
+                except (OSError, ValueError):
                     # server not up yet or restarted: retry next second
                     old = conns.pop(mid, None)
                     if old:
