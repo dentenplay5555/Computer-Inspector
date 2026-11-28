@@ -223,7 +223,9 @@ bool core::start(std::string&err) {
   tlso.keyFile=tls_.key;
   tlso.caFile="NONE";                // clients do not present certificates
 
-  wsr_=std::make_unique<ix::WebSocketServer>(ws_port,"0.0.0.0");
+  // backlog 128 (ixwebsocket's default is 5): a classroom of pcs reconnecting at once after
+  // a restart must not be turned away
+  wsr_=std::make_unique<ix::WebSocketServer>(ws_port,"0.0.0.0",128);
   wsr_->setTLSOptions(tlso);
   wsr_->setOnClientMessageCallback([this](std::shared_ptr<ix::ConnectionState> state,ix::WebSocket&ws,const ix::WebSocketMessagePtr&msg){
     switch (msg->type) {
@@ -258,7 +260,7 @@ bool core::start(std::string&err) {
   wsr_->start();
   log(lvl::info,"Agents can connect on port "+std::to_string(ws_port));
 
-  http_=std::make_unique<ix::HttpServer>(http_port,"0.0.0.0");
+  http_=std::make_unique<ix::HttpServer>(http_port,"0.0.0.0",128);
   http_->setTLSOptions(tlso);
   http_->setOnConnectionCallback(
     [this](ix::HttpRequestPtr rq,std::shared_ptr<ix::ConnectionState> state)->ix::HttpResponsePtr {

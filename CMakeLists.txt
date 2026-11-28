@@ -16,8 +16,19 @@ FetchContent_Declare(mbedtls
   URL_HASH SHA256=8b54fb9bcf4d5a7078028e0520acddefb7900b3e66fec7f7175bb5b7d85ccdca
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
+# thread-safe mbedtls (every connection has its own thread): common/mbedtls_user_config.h
+set(MBEDTLS_USER_CONFIG_FILE "${CMAKE_SOURCE_DIR}/common/mbedtls_user_config.h" CACHE FILEPATH "" FORCE)
+if (NOT MSVC)
+  set(LINK_WITH_PTHREAD ON CACHE BOOL "" FORCE)
+endif()
 FetchContent_MakeAvailable(mbedtls)
 set(MBEDTLS_LIBS mbedtls mbedx509 mbedcrypto)
+if (MSVC)
+  # mbedtls/threading.h includes "threading_alt.h" (windows critical sections)
+  foreach (t ${MBEDTLS_LIBS})
+    target_include_directories(${t} PUBLIC ${CMAKE_SOURCE_DIR}/common)
+  endforeach()
+endif()
 
 # IXWebSocket with TLS through that mbedTLS (also on macOS, where it would pick SecureTransport)
 set(USE_TLS      ON  CACHE BOOL "" FORCE)
