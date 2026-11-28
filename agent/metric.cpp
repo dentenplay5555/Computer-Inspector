@@ -1,6 +1,11 @@
 #include "metric.hpp"
 #include <iostream>
 #include <cmath>
+#if defined(_MSC_VER)
+#include <intrin.h>
+#elif defined(__x86_64__) || defined(__i386__)
+#include <cpuid.h>
+#endif
 static double round1(double x) {return std::round(x*10.0)/10.0;}
 using json=nlohmann::json;
 col::col() {
@@ -66,3 +71,33 @@ void to_json(json&j,const stats&s) {
     }
   };
 }
+#if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
+  std::string cp_ne() {
+    unsigned r[12]={};
+#if defined(_MSC_VER)
+    int regs[4];
+    __cpuid(regs,0x80000000);
+    unsigned mx=static_cast<unsigned>(regs[0]);
+#else
+    unsigned mx=__get_cpuid_max(0x80000000,nullptr);
+#endif
+    if (mx<0x80000004) return "unknown";
+    for (int i=0;i<3;i++) {
+#if defined(_MSC_VER)
+      __cpuid(regs,0x80000002+i);
+      for (int j=0;j<4;j++) r[i*4+j]=static_cast<unsigned>(regs[j]);
+#else
+      __get_cpuid(0x80000002+i,&r[i*4],&r[i*4+1],&r[i*4+2],&r[i*4+3]);
+#endif
+    }
+    std::string s(reinterpret_cast<char*>(r),48);
+    size_t z=s.find('\0');
+    if (z!=std::string::npos)s.resize(z);
+    size_t a=s.find_first_not_of(' '),b=s.find_last_not_of(' ');
+    if (b==std::string::npos) return "unknown";
+    s=s.substr(a,b-a+1);
+    return s;
+  }
+#else
+  std::string cp_ne() {return "unknown";}
+#endif

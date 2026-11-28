@@ -48,11 +48,24 @@ int main(int argc, char *argv[]) {
   std::string url=surl.empty() ? "ws://"+host+":"+port+"/agent" : surl;
   ws.setUrl(url);
   ws.setPingInterval(10);
-  ws.setOnMessageCallback([](const ix::WebSocketMessagePtr& msg){
+  ws.setOnMessageCallback([&ws,&id](const ix::WebSocketMessagePtr& msg){
     switch (msg->type) {
-      case ix::WebSocketMessageType::Open: 
+      case ix::WebSocketMessageType::Open: {
         std::cout<<"initialized Web socket\n";
+        json a;
+        uint64_t tot=0,av=0;
+        if(remem(tot,av)) tot=0;
+        a["type"]="head";
+        a["id"]=id;
+        a["os"]=osname;
+        a["cpu_model"]=cp_ne();
+        a["core"]=std::thread::hardware_concurrency();
+        a["ram_tot_mb"]=tot/1024;
+        try {
+          ws.send(a.dump(-1,' ',false,json::error_handler_t::replace));
+        } catch (const json::exception&e) {std::cerr<<"JSON ERROR: "<<e.what()<<'\n';}
         break;
+      }
       case ix::WebSocketMessageType::Close: 
         std::cout<<"Disconnecting...\n"; 
         break;
