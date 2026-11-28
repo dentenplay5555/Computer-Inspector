@@ -2,115 +2,1461 @@
 <html lang="th">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Computer Inspector</title>
   <style>
-    body { 
-      font-family: system-ui, sans-serif; 
-      background: #f4f5f7; margin: 16px; 
+    /* Direction: DESIGN.md (friendly classroom tool, neutral greys + one teal accent,
+       light/dark, Noto Sans Thai, Thai/English). Status colors only mark machine state.
+       All color pairs below are checked for WCAG AA. */
+    :root {
+      --bg: #f5f6f6; --panel: #ffffff; --text: #1d2527; --muted: #56625f; --line: #d7dcdd;
+      --accent: #0f766e; --on-accent: #ffffff; --accent-soft: #e7f3f1;
+      --track: #e3e7e8; --fill: #7a8689; --spark: #56625f;
+      --ok: #137535; --warn: #a84d06; --crit: #b91c1c; --off: #56625f;
+      --ok-bg: #e6f3eb; --warn-bg: #fbeedd; --crit-bg: #fbe4e2; --off-bg: #eceeee;
+      --warn-line: #a86f00; --off-line: #7a828c;
+      color-scheme: light;
     }
-    #grid { 
-      display: grid; 
-      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); 
-      gap: 12px; 
+    :root[data-theme="dark"] {
+      --bg: #111617; --panel: #192022; --text: #e5ecec; --muted: #9aa8aa; --line: #2b3537;
+      --accent: #2dd4bf; --on-accent: #062b27; --accent-soft: #12302d;
+      --track: #2a3436; --fill: #8a989b; --spark: #9aa8aa;
+      --ok: #4ade80; --warn: #fbbf24; --crit: #f87171; --off: #9aa8aa;
+      --ok-bg: #13281c; --warn-bg: #2e2410; --crit-bg: #321a1a; --off-bg: #1e2729;
+      --warn-line: #fbbf24; --off-line: #6b787b;
+      color-scheme: dark;
     }
-    .card { 
-      background: #fff; 
-      border-radius: 10px; 
-      padding: 12px 14px;
-      border-left: 6px solid gray; 
+    [hidden] { display: none !important; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Noto Sans Thai", "Noto Sans", "Sarabun", "Leelawadee UI", "Thonburi", system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
     }
-    .card.ok { 
-      border-left-color: #1f9d55; 
+    button { font: inherit; }
+    :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+    /* header*/
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px 20px;
+      padding: 16px 24px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
     }
-    .card.warn { 
-      border-left-color: #d98e04; 
+    .brand { margin-right: auto; }
+    .brand h1 { margin: 0; font-size: 22px; line-height: 1.2; }
+    .brand p { margin: 0; color: var(--muted); font-size: 14px; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; }
+    .btn {
+      min-height: 44px;
+      padding: 0 16px;
+      border: 1px solid var(--off-line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 15px;
     }
-    .card.crit { 
-      border-left-color: #d6342c; 
+    .btn:hover { border-color: var(--text); }
+    /* icon buttons: hand-drawn inline SVG (no web font, the lab may be offline); the
+       accessible name comes from aria-label, the tooltip from title */
+    .btn.ico { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; }
+    .btn.sq { width: 44px; padding: 0; }
+    .btn svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .btn .code { font-size: 14px; font-weight: 700; letter-spacing: .02em; }
+    .seg { display: inline-flex; border: 1px solid var(--off-line); border-radius: 8px; overflow: hidden; }
+    .seg .btn { border: 0; border-radius: 0; }
+    .seg .btn + .btn { border-left: 1px solid var(--off-line); }
+    .seg .btn[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+
+    main { padding: 20px 24px 40px; max-width: 1600px; margin: 0 auto; }
+
+    /* status strip: the focal point*/
+    .strip {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 28px;
+      padding: 16px 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      margin-bottom: 16px;
     }
-    .card.offline {
-      opacity: .5; 
+    .conn { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--muted); margin-right: auto; }
+    .count { display: flex; align-items: baseline; gap: 8px; }
+    .count b { font-size: 28px; line-height: 1; font-variant-numeric: tabular-nums; }
+    .count span { font-size: 15px; }
+    .count.zero b, .count.zero span { color: var(--muted); }
+    .count.ok b, .count.ok span { color: var(--ok); }
+    .count.warn b, .count.warn span { color: var(--warn); }
+    .count.crit b, .count.crit span { color: var(--crit); }
+    .count.offline b, .count.offline span { color: var(--off); }
+
+    /* identity motif: a status is always a dot plus a word, never color alone*/
+    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; background: var(--off); }
+    .ok .dot, .dot.ok { background: var(--ok); }
+    .warn .dot, .dot.warn { background: var(--warn); }
+    .crit .dot, .dot.crit { background: var(--crit); }
+    .dot.live { background: var(--ok); }
+    .dot.wait { background: var(--muted); }
+    .dot.lost { background: var(--crit); }
+
+    .banner {
+      padding: 12px 16px;
+      border-radius: 10px;
+      margin-bottom: 16px;
+      background: var(--crit-bg);
+      color: var(--crit);
+      font-weight: 600;
     }
-    .top {
-      display: flex; 
-      justify-content: space-between; 
-      margin-bottom: 8px; }
-    .name { 
-      font-weight: 600; 
+    .note { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+
+    /* cards*/
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr));
+      gap: 14px;
     }
-    .sub { 
-      font-size: 12px; 
-      color: #666; 
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 18px 20px;
     }
-    .row { 
-      display: grid; 
-     grid-template-columns: 42px 1fr 48px; 
-      gap: 8px;
-      align-items: center; 
-      font-size: 12px; 
-      margin: 5px 0; 
+    /* only cards that need the teacher get a colored outline*/
+    .card.warn { border: 2px solid var(--warn-line); }
+    .card.crit { border: 2px solid var(--crit); }
+    .card.offline { background: var(--off-bg); }
+    .card.offline .metrics { opacity: .55; }
+    /* card top: name + edit button, then status · id · ip · os*/
+    .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .name { font-weight: 700; font-size: 18px; line-height: 1.3; overflow-wrap: anywhere; padding-top: 2px; }
+    .sub { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin: 4px 0 14px; }
+    .meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+    .state { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+    .state.ok { color: var(--ok); } .state.warn { color: var(--warn); }
+    .state.crit { color: var(--crit); } .state.offline { color: var(--off); }
+    .row {
+      display: grid;
+      grid-template-columns: 46px 1fr 44px;
+      gap: 10px;
+      align-items: center;
+      font-size: 14px;
+      margin: 8px 0;
     }
-    .bar { 
-      height: 7px; background: #e3e6ec; 
-      border-radius: 4px; 
-      overflow: hidden; 
+    .row .v { text-align: right; font-variant-numeric: tabular-nums; }
+    .row.hot .v { color: var(--warn); font-weight: 700; }
+    .row.hotter .v { color: var(--crit); font-weight: 700; }
+    .bar { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; }
+    .bar i { display: block; height: 100%; background: var(--fill); border-radius: 4px; }
+    .row.hot .bar i { background: var(--warn); }
+    .row.hotter .bar i { background: var(--crit); }
+    .net { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: 14px; margin-top: 10px; font-variant-numeric: tabular-nums; }
+    .hist { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 14px; }
+    .abn { color: var(--crit); font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+    .small { color: var(--muted); font-size: 13px; }
+    .spark { display: grid; grid-template-columns: 46px 1fr 56px; gap: 10px; align-items: center; font-size: 13px; margin: 2px 0; }
+    .spark svg { width: 100%; height: 24px; display: block; }
+    .spark .v { text-align: right; font-variant-numeric: tabular-nums; }
+    .spark polyline { fill: none; stroke: var(--spark); stroke-width: 1.5; }
+    .spark line { stroke: var(--off-line); stroke-width: 1; stroke-dasharray: 3 3; }
+    .spark.hot { color: var(--crit); font-weight: 700; }
+    .spark.hot polyline { stroke: var(--crit); }
+
+    .empty {
+      background: var(--panel);
+      border: 1px dashed var(--off-line);
+      border-radius: 12px;
+      padding: 40px 24px;
+      text-align: center;
     }
-    .bar i { 
-      display: block; 
-      height: 100%; 
-      background: #2f6fed; 
+    .empty h2 { margin: 0 0 6px; font-size: 20px; }
+    .empty p { margin: 0 0 10px; color: var(--muted); }
+    .empty code {
+      display: inline-block;
+      background: var(--accent-soft);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 15px;
+      /* a command to type: monospace so "--host" cannot look like a dash*/
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      overflow-wrap: anywhere;
     }
-    .na {
-      border: ;
+
+    /* room map*/
+    #mapwrap, .mapwrap { overflow-x: auto; padding: 4px 2px 8px; }
+    .front {
+      text-align: center;
+      font-size: 14px;
+      color: var(--muted);
+      border-bottom: 3px solid var(--line);
+      padding-bottom: 6px;
+      margin-bottom: 14px;
+    }
+    .room { display: grid; gap: 10px; grid-auto-rows: minmax(64px, auto); }
+    /* label (aisle, teacher's desk...): no computer, only text, any size*/
+    .tag {
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      overflow-wrap: anywhere;
+      background: repeating-linear-gradient(135deg, transparent 0 9px, var(--track) 9px 11px);
+    }
+    .seat {
+      border: 2px solid var(--off-line);
+      border-radius: 10px;
+      padding: 8px 10px;
+      min-height: 64px;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      overflow-wrap: anywhere;
+      background: var(--panel);
+    }
+    .seat b { font-size: 15px; }
+    .seat.ok      { background: var(--ok-bg);   border-color: var(--ok);        color: var(--ok); }
+    .seat.warn    { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn); }
+    .seat.crit    { background: var(--crit-bg); border-color: var(--crit);      color: var(--crit); }
+    .seat.offline { background: var(--off-bg);  border-color: var(--off-line);  color: var(--off); }
+    .seat.none    { background: transparent; border-style: dashed; color: var(--muted); }
+    .seat b { color: var(--text); }
+    .seat .flag { color: var(--crit); font-weight: 700; }
+    .outside {
+      margin-top: 18px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 16px;
+    }
+    .outside h2 { font-size: 16px; margin: 0 0 6px; }
+    .outside ul { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 14px; }
+    .outside li { display: inline-flex; align-items: center; gap: 6px; }
+
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+    .btn.primary:hover { border-color: var(--text); }
+    .btn.danger { color: var(--crit); }
+    .btn.ico svg + span { margin-left: 2px; }
+    .mapbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; margin-bottom: 12px; }
+    #mapmsg { color: var(--ok); font-weight: 600; font-size: 14px; }
+
+    /* seat map editor*/
+    .edbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 16px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 14px;
+    }
+    .edbar .grow { flex: 1; }
+    .edbar .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+    .stepper { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; }
+    .stepper output { min-width: 2.2ch; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .stepper .btn { font-size: 20px; line-height: 1; }
+    .edhint { color: var(--muted); font-size: 14px; margin: 10px 0 0; }
+    #ed-msg { min-height: 1.5em; margin: 4px 0 10px; font-size: 14px; color: var(--muted); }
+    #ed-msg.bad { color: var(--crit); font-weight: 600; }
+    /* the page's own pop-up (<dialog>), not confirm(): some browsers block or auto-answer those*/
+    .ask {
+      width: min(420px, calc(100vw - 32px));
+      padding: 20px 22px 18px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      color: var(--text);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, .28);
+    }
+    .ask::backdrop { background: rgba(10, 14, 15, .45); }
+    .ask h2 { margin: 0 0 6px; font-size: 18px; line-height: 1.3; }
+    .ask p { margin: 0; color: var(--muted); font-size: 15px; }
+    .ask .acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+    .ask code {
+      display: block;
+      margin-top: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: var(--accent-soft);
+      color: var(--text);
+      font-size: 14px;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      overflow-wrap: anywhere;
+      user-select: all;
+    }
+    /* after removing a computer: how to add it back*/
+    .notice {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      border-radius: 10px;
+    }
+    .notice > div { flex: 1; min-width: 0; }
+    .notice p { margin: 0; }
+    .notice.bad { border-left-color: var(--crit); }
+    .notice.bad p { color: var(--crit); font-weight: 600; }
+    .offrow { margin: -6px 0 12px; }
+    /* quiet edit button: no outline until hovered or focused*/
+    .btn.edit {
+      flex: none;
+      width: 36px;
+      min-height: 36px;
+      margin: -4px -8px 0 0;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-color: transparent;
+      background: transparent;
+      color: var(--muted);
+    }
+    .btn.edit:hover { border-color: var(--off-line); color: var(--text); }
+    .btn.edit svg { width: 18px; height: 18px; }
+    .desc { margin: -6px 0 14px; font-size: 14px; color: var(--text); overflow-wrap: anywhere; white-space: pre-line; }
+    .notice .nacts { display: flex; flex-wrap: wrap; gap: 8px; flex: none; }
+    /* computers removed on the dashboard*/
+    #removed { margin-top: 14px; }
+    /* "show removed computers": reads as text, still a 44 px target*/
+    .linkbtn {
+      min-height: 44px;
+      padding: 0 4px;
+      border: 0;
+      background: none;
+      color: var(--accent);
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .linkbtn:hover { color: var(--text); }
+    .linkbtn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
+    .linkbtn[aria-expanded="true"] svg { transform: rotate(180deg); }
+    #removed .panel { margin-top: 6px; }
+    #removed ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+    #removed li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+    #removed li .meta { margin-right: auto; }
+    /* computer details pop-up*/
+    .ask label { display: block; font-size: 14px; font-weight: 600; margin: 14px 0 4px; }
+    .ask input[type="text"], .ask textarea {
+      width: 100%;
+      min-height: 44px;
+      padding: 8px 12px;
+      border: 1px solid var(--off-line);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+    }
+    .ask textarea { resize: vertical; }
+    .ask .small { margin-top: 4px; }
+    .ask .err { color: var(--crit); font-weight: 600; font-size: 14px; margin: 10px 0 0; min-height: 0; }
+    .ask .acts .grow { flex: 1; }
+    .room.ed .cell { border: 1px dashed var(--off-line); border-radius: 10px; }
+    .blk {
+      position: relative;
+      z-index: 1;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 6px 8px;
+      font-size: 13px;
+      overflow: hidden;
+      overflow-wrap: anywhere;
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .blk.seat-e { background: var(--panel); border: 2px solid var(--off-line); }
+    .blk.seat-e b { font-size: 15px; }
+    .blk.tag { border: 2px dashed var(--off-line); background-color: var(--panel); }
+    .blk[aria-pressed="true"] { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .blk.dragging { z-index: 3; cursor: grabbing; box-shadow: 0 6px 18px rgba(0, 0, 0, .2); }
+    .blk.bad { outline: 3px solid var(--crit); outline-offset: 2px; }
+    /* resize grip, bottom-right corner of a label*/
+    .hdl {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 28px;
+      height: 28px;
+      cursor: nwse-resize;
+      touch-action: none;
+      background: linear-gradient(135deg, transparent 0 52%, var(--muted) 52% 60%, transparent 60% 70%, var(--muted) 70% 78%, transparent 78%);
+    }
+    .edside { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 16px; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+    .panel h2 { font-size: 16px; margin: 0 0 6px; }
+    .panel label { display: block; font-size: 14px; margin: 12px 0 4px; }
+    .panel input[type="text"] {
+      width: 100%;
+      min-height: 44px;
+      padding: 0 12px;
+      border: 1px solid var(--off-line);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+    }
+    .panel .stepper { margin: 12px 16px 0 0; }
+    .panel > .btn { margin-top: 14px; }
+    .addrow { display: flex; gap: 8px; }
+    .addrow input { flex: 1; min-width: 0; }
+    .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+
+    @media (max-width: 600px) {
+      header { padding: 12px 16px; }
+      main { padding: 16px 16px 32px; }
+      .strip { gap: 10px 20px; padding: 14px 16px; }
+      .count b { font-size: 24px; }
     }
   </style>
 </head>
 <body>
-  <div id="status">กำลังเชื่อมต่อ...</div>
-  <div id="ovall"></div>
-  <div id="grid"></div>
-  <script>
-  const esc = (s) => String(s).replace(/[&<>"']/g,c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
-  function connect() {
-    const hn = location.hostname || "127.0.0.1";
-    const ws = new WebSocket("ws://" + hn + ":8080/dashboard");
-    const label = { ok: "ปกติ", warn: "เฝ้าระวัง", crit: "วิกฤต", offline: "ออฟไลน์" };
-    const bar = (label, v) => {
-      const p=Math.min(100,Math.max(0,Number(v)));
-      return `<div class="row"><span>${label}</span>
-              <div class="bar"><i style="width:${p}%"></i></div>
-              <span>${p.toFixed(0)}%</span></div>`;
-    };
-    ws.onopen = () => {
-      document.getElementById("status").textContent = "เชื่อมต่อแล้ว";
-    };
-    ws.onmessage = (e) => {
-      const dt = JSON.parse(e.data);
-      dt.machines.sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
-      let arr={ok: 0, warn: 0, crit: 0,offline: 0};
-      for (const m of dt.machines) arr[m.status]++;
-      let crd = dt.machines.map(m=>` <div class="card ${m.status}">
-        <div class="top">
-          <span class="name">${esc(m.id)}</span>
-          <span class="sub">${esc(m.ip)} status: ${label[m.status]}</span>
-          </div>
-          ${bar("CPU", m.cpu)}
-          ${bar("RAM", m.ram)}
-          ${bar("DISK", m.disk)}
-        <div class="sub">↓ ${Number(m.rx).toFixed(1)} KB/s &nbsp; ↑ ${Number(m.tx).toFixed(1)} KB/s</div>
-      </div>`).join("");
-      const ovl=Object.keys(label).map(k=>`${label[k]} ${arr[k]}`).join(" : ");
-      if (dt.machines.length===0) crd=`<p class="na">No Available PC yet</p>`;
-      document.getElementById("ovall").innerHTML=ovl;
-      document.getElementById("grid").innerHTML = crd;
-    };
-    ws.onclose = () => {
-      document.getElementById("status").textContent = "หลุดการเชื่อมต่อ กำลังต่อใหม่...";
-      setTimeout(connect, 2000);
-    };
+  <header>
+    <div class="brand">
+      <h1>Computer Inspector</h1>
+      <p data-t="subtitle"></p>
+    </div>
+    <div class="tools">
+      <div class="seg" id="views" role="group" hidden>
+        <button type="button" class="btn" data-v="cards" aria-pressed="true" data-t="cards"></button>
+        <button type="button" class="btn" data-v="map" aria-pressed="false" data-t="map"></button>
+      </div>
+      <button type="button" class="btn ico" id="lang"></button>
+      <button type="button" class="btn ico sq" id="theme"></button>
+    </div>
+  </header>
+  <main>
+    <section class="strip" aria-live="polite">
+      <div class="conn"><span class="dot wait" id="conndot"></span><span id="conntext"></span></div>
+      <div id="counts" style="display:contents"></div>
+    </section>
+    <div class="banner" id="lost" hidden></div>
+    <div class="notice" id="notice" role="status" hidden>
+      <div><p id="noticep"></p></div>
+      <div class="nacts">
+        <button type="button" class="btn" id="noticea" hidden></button>
+        <button type="button" class="btn" id="noticex"></button>
+      </div>
+    </div>
+    <p class="note" id="lnote" hidden></p>
+    <div class="mapbar" id="mapbar" hidden>
+      <span id="mapmsg" role="status" aria-live="polite"></span>
+      <button type="button" class="btn ico" id="edopen"></button>
+    </div>
+    <div id="grid"></div>
+    <div id="map" hidden></div>
+    <section id="removed" hidden></section>
+    <div id="ed" hidden></div>
+    <dialog class="ask" id="mdlg" aria-labelledby="mq">
+      <form id="mform" novalidate>
+        <h2 id="mq"></h2>
+        <p class="small" id="mid"></p>
+        <label for="mname" id="mnamel"></label>
+        <input type="text" id="mname" maxlength="40" autocomplete="off">
+        <p class="small" id="mnameh"></p>
+        <label for="mdesc" id="mdescl"></label>
+        <textarea id="mdesc" maxlength="200" rows="3"></textarea>
+        <p class="err" id="merr" role="alert"></p>
+        <div class="acts">
+          <button type="button" class="btn danger" id="mrm"></button>
+          <span class="grow"></span>
+          <button type="button" class="btn" id="mcancel"></button>
+          <button type="submit" class="btn primary" id="msave"></button>
+        </div>
+      </form>
+    </dialog>
+    <dialog class="ask" id="askdlg" aria-labelledby="askq" aria-describedby="askp">
+      <h2 id="askq"></h2>
+      <p id="askp"></p>
+      <code id="askc" hidden></code>
+      <div class="acts">
+        <button type="button" class="btn" id="ask-no"></button>
+        <button type="button" class="btn danger" id="ask-yes"></button>
+      </div>
+    </dialog>
+  </main>
 
+  <script>
+  // text, thai and english
+  const TXT = {
+    th: {
+      subtitle: "แดชบอร์ดครู", cards: "การ์ด", map: "ผังห้อง",
+      langCode: "EN", langLabel: "เปลี่ยนเป็นภาษาอังกฤษ (English)",
+      dark: "เปลี่ยนเป็นโหมดมืด", light: "เปลี่ยนเป็นโหมดสว่าง",
+      connecting: "กำลังเชื่อมต่อเซิร์ฟเวอร์...", connected: "เชื่อมต่อแล้ว",
+      lost: "หลุดการเชื่อมต่อ กำลังต่อใหม่... ข้อมูลด้านล่างอาจไม่เป็นปัจจุบัน",
+      ok: "ปกติ", warn: "เฝ้าระวัง", crit: "วิกฤต", offline: "ออฟไลน์",
+      waiting: "รอข้อมูลจากเซิร์ฟเวอร์...",
+      empty: "ยังไม่มีเครื่องเชื่อมต่อ", emptyHint: "รันคำสั่งนี้บนเครื่องนักเรียนแต่ละเครื่อง:",
+      down: "รับ", up: "ส่ง", noData: d => `ไม่ได้รับข้อมูลมา ${d}`,
+      unit: { s: "วินาที", m: "นาที", h: "ชั่วโมง", d: () => "วัน" },
+      removeBtn: "เอาออกจากแดชบอร์ด", rmTitle: id => `เอา ${id} ออกจากแดชบอร์ด?`,
+      rmBody: "เครื่องนี้จะถูกซ่อน และเซิร์ฟเวอร์จะไม่รับข้อมูลจากเครื่องนี้จนกว่าจะกด เพิ่มกลับ ใน แสดงเครื่องที่เอาออก ด้านล่างของหน้านี้ ประวัติของเครื่องยังเก็บไว้",
+      rmYes: "เอาออก", rmNo: "ยกเลิก",
+      rmDone: id => `เอา ${id} ออกแล้ว เพิ่มกลับได้ด้วยปุ่ม เพิ่มกลับ ตรงนี้ หรือใน แสดงเครื่องที่เอาออก ด้านล่างของหน้า`,
+      rmFail: id => `เอา ${id} ออกไม่สำเร็จ`, close: "ปิด",
+      showRemoved: n => `แสดงเครื่องที่เอาออก (${n})`, hideRemoved: n => `ซ่อนเครื่องที่เอาออก (${n})`, removedHint: "เซิร์ฟเวอร์ไม่รับข้อมูลจากเครื่องเหล่านี้จนกว่าจะเพิ่มกลับ",
+      addBack: "เพิ่มกลับ", backDone: id => `เพิ่ม ${id} กลับแล้ว จะแสดงอีกครั้งเมื่อ agent ของเครื่องส่งข้อมูล`,
+      backFail: id => `เพิ่ม ${id} กลับไม่สำเร็จ`, localOnly: id => `ทำได้เฉพาะบนเครื่องที่รัน server`,
+      editBtn: id => `แก้ไข ${id}`, mName: "ชื่อที่แสดง", mNameHint: "เว้นว่างไว้เพื่อแสดงรหัสเครื่อง",
+      mDesc: "คำอธิบาย", mIdNote: id => `รหัสเครื่อง: ${id} (ใช้ในผังที่นั่งและคำสั่ง agent เปลี่ยนไม่ได้จากที่นี่)`,
+      mSave: "บันทึก", mCancel: "ยกเลิก", mSaveFail: "บันทึกไม่สำเร็จ",
+      learning: "กำลังเรียนรู้ค่าปกติของเครื่องนี้ (ยังไม่แจ้งเตือน)",
+      histLoading: "กำลังโหลดประวัติ...", histErr: "โหลดประวัติไม่ได้ จะลองใหม่อัตโนมัติ",
+      histFew: "ยังมีข้อมูลไม่พอสำหรับกราฟ (เก็บทุก 10 วินาที)",
+      histFoot: "1 ชั่วโมงล่าสุด · เส้นประ = ค่าปกติ", abn: "ผิดไปจากปกติของเครื่องนี้",
+      front: "หน้าห้อง", seatNoData: "ไม่มีข้อมูล", outside: "ไม่อยู่ในผัง",
+      mapLabel: "ผังห้อง (เลื่อนซ้ายขวาได้)",
+      layoutMissing: "ยังไม่มีผังที่นั่ง: เปิด ผังห้อง แล้วกด สร้างผังที่นั่ง",
+      layoutBad: "ไฟล์ layout.json ไม่ถูกต้อง: แก้ไฟล์ หรือสร้างผังใหม่ที่ ผังห้อง",
+      layoutFail: "โหลดผังที่นั่งไม่ได้",
+      edit: "แก้ไขผัง", create: "สร้างผังที่นั่ง",
+      noMap: "ยังไม่มีผังที่นั่ง", noMapHint: "กด สร้างผังที่นั่ง แล้ววางเครื่องตามตำแหน่งจริงในห้อง",
+      cols: "คอลัมน์", rows: "แถว", width: "กว้าง", height: "สูง", fewer: "ลด", more: "เพิ่ม",
+      addLabel: "เพิ่มป้าย", save: "บันทึก", cancel: "ยกเลิก", download: "ดาวน์โหลดไฟล์",
+      edHint: "ลากบล็อกเพื่อย้าย ลากมุมขวาล่างของป้ายเพื่อปรับขนาด หรือกดเลือกบล็อกแล้วกดช่องที่ต้องการ · คีย์บอร์ด: ลูกศรย้าย, Shift+ลูกศรปรับขนาดป้าย, Delete ลบ, Esc ยกเลิกการเลือก",
+      editArea: "ผังห้องที่กำลังแก้ไข",
+      seat: "ที่นั่ง", label: "ป้าย", selTitle: "บล็อกที่เลือก", selNone: "กดบล็อกในผังเพื่อแก้ไข",
+      seatId: "รหัสเครื่อง", labelText: "ข้อความบนป้าย", labelPh: "เช่น ทางเดิน, โต๊ะครู", remove: "ลบออกจากผัง",
+      unplaced: "เครื่องที่ยังไม่ได้วาง", unplacedNone: "เครื่องที่เชื่อมต่ออยู่ถูกวางในผังครบแล้ว",
+      addById: "เพิ่มที่นั่งด้วยรหัสเครื่อง", add: "เพิ่ม",
+      at: (c, r) => `คอลัมน์ ${c} แถว ${r}`, size: (w, h) => `${w} × ${h} ช่อง`,
+      moved: "ย้ายแล้ว", resized: "ปรับขนาดแล้ว", removed: "ลบออกจากผังแล้ว", saving: "กำลังบันทึก...", saved: "บันทึกผังที่นั่งแล้ว",
+      saveLocal: "บันทึกได้เฉพาะบนเครื่องที่รัน server: กด ดาวน์โหลดไฟล์ แล้ววาง layout.json ไว้โฟลเดอร์เดียวกับโปรแกรม server",
+      saveFail: "บันทึกไม่สำเร็จ",
+      shrinkBlocked: "ย้ายหรือลบบล็อกในคอลัมน์หรือแถวสุดท้ายออกก่อน",
+      noRoom: "ไม่มีช่องว่างเหลือ เพิ่มคอลัมน์หรือแถวก่อน",
+      noFit: "วางตรงนั้นไม่ได้: ชนบล็อกอื่นหรือเกินขอบห้อง",
+      idTaken: "รหัสนี้อยู่ในผังแล้ว", textEmpty: "ใส่ข้อความบนป้าย หรือลบป้ายนี้ออก", idEmpty: "ต้องใส่รหัสเครื่อง", idLong: "รหัสเครื่องยาวเกิน 64 ตัวอักษร",
+      discard: "ทิ้งการแก้ไขที่ยังไม่ได้บันทึก?", discardHint: "ผังที่บันทึกไว้จะไม่เปลี่ยน", discardYes: "ทิ้งการแก้ไข", keep: "แก้ไขต่อ",
+    },
+    en: {
+      subtitle: "Teacher dashboard", cards: "Cards", map: "Room map",
+      langCode: "TH", langLabel: "Switch to Thai (ภาษาไทย)",
+      dark: "Switch to dark mode", light: "Switch to light mode",
+      connecting: "Connecting to the server...", connected: "Connected",
+      lost: "Connection lost, reconnecting... The data below may be out of date.",
+      ok: "Normal", warn: "Watch", crit: "Critical", offline: "Offline",
+      waiting: "Waiting for data from the server...",
+      empty: "No computers have connected yet", emptyHint: "Run this on each student PC:",
+      down: "Down", up: "Up", noData: d => `No data for ${d}`,
+      unit: { s: "s", m: "min", h: "h", d: n => n === 1 ? "day" : "days" },
+      removeBtn: "Remove from dashboard", rmTitle: id => `Remove ${id} from the dashboard?`,
+      rmBody: "It is hidden, and the server ignores its data, until you press Add back under Show removed computers at the bottom of this page. Its history is kept.",
+      rmYes: "Remove", rmNo: "Cancel",
+      rmDone: id => `${id} was removed. To add it back, press Add back here, or under Show removed computers at the bottom of the page.`,
+      rmFail: id => `Could not remove ${id}`, close: "Close",
+      showRemoved: n => `Show removed computers (${n})`, hideRemoved: n => `Hide removed computers (${n})`, removedHint: "The server ignores these computers' data until you add them back.",
+      addBack: "Add back", backDone: id => `${id} was added back. It shows again when its agent sends data.`,
+      backFail: id => `Could not add ${id} back`, localOnly: id => `Only possible on the server computer`,
+      editBtn: id => `Edit ${id}`, mName: "Display name", mNameHint: "Leave empty to show the computer ID",
+      mDesc: "Description", mIdNote: id => `Computer ID: ${id} (used by the seat map and the agent command; it cannot be changed here)`,
+      mSave: "Save", mCancel: "Cancel", mSaveFail: "Could not save",
+      learning: "Learning this computer's normal usage (no alerts yet)",
+      histLoading: "Loading history...", histErr: "Could not load history, retrying automatically",
+      histFew: "Not enough data for graphs yet (saved every 10 s)",
+      histFoot: "Last hour · dashed line = normal", abn: "Unusual for this computer",
+      front: "Front of room", seatNoData: "No data", outside: "Not in the layout",
+      mapLabel: "Room map (scrolls sideways)",
+      layoutMissing: "No seat map yet: open Room map and press Create seat map",
+      layoutBad: "layout.json is invalid: fix the file, or make a new map under Room map",
+      layoutFail: "Could not load the seat map",
+      edit: "Edit map", create: "Create seat map",
+      noMap: "No seat map yet", noMapHint: "Press Create seat map, then place each computer where it really is in the room",
+      cols: "Columns", rows: "Rows", width: "Width", height: "Height", fewer: "Fewer", more: "More",
+      addLabel: "Add label", save: "Save", cancel: "Cancel", download: "Download file",
+      edHint: "Drag a block to move it. Drag the bottom-right corner of a label to resize it. Or select a block, then click the cell it should go to · Keyboard: arrows move, Shift+arrows resize a label, Delete removes, Esc deselects",
+      editArea: "Room map being edited",
+      seat: "Seat", label: "Label", selTitle: "Selected block", selNone: "Click a block in the map to change it",
+      seatId: "Computer ID", labelText: "Label text", labelPh: "e.g. aisle, teacher's desk", remove: "Remove from map",
+      unplaced: "Computers not placed yet", unplacedNone: "Every connected computer is in the map",
+      addById: "Add a seat by computer ID", add: "Add",
+      at: (c, r) => `column ${c}, row ${r}`, size: (w, h) => `${w} × ${h} cells`,
+      moved: "Moved", resized: "Resized", removed: "Removed from the map", saving: "Saving...", saved: "Seat map saved",
+      saveLocal: "Only the server computer can save. Press Download file, then put layout.json in the same folder as the server program",
+      saveFail: "Could not save",
+      shrinkBlocked: "Move or remove the blocks in the last column or row first",
+      noRoom: "No free cell left. Add a column or a row first",
+      noFit: "Cannot go there: it overlaps another block or leaves the room",
+      idTaken: "That ID is already in the map", textEmpty: "Type the label text, or remove the label", idEmpty: "Type a computer ID", idLong: "Computer IDs can be at most 64 characters",
+      discard: "Discard the changes you have not saved?", discardHint: "The saved seat map stays as it is.", discardYes: "Discard changes", keep: "Keep editing",
+    },
+  };
+  const STATES = ["ok", "warn", "crit", "offline"];
+  // simple stroke icons drawn for this page (24x24 grid)
+  const ICON = {
+    globe: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>`,
+    moon: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>`,
+    pencil: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>`,
+    sun: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>`,
+  };
+  const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const $ = (id) => document.getElementById(id);
+
+  // per-viewer settings; storage may be blocked, so every access is guarded
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  };
+  let lang = store.get("ci-lang") === "en" ? "en" : "th";
+  let theme = store.get("ci-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  let view = store.get("ci-view") === "map" ? "map" : "cards";
+  let conn = "connecting";      // connecting | connected | lost
+  let lastDt = null;            // last snapshot from the server
+  let layout = null;            // checked layout.json, or null
+  let layoutNote = null;        // key of the note to show about layout.json
+  let mapMsg = null;            // short "saved" message next to the edit button
+  let notice = null;            // {key, id, bad, act} shown under the status strip after remove / add back
+  let can = false;              // this browser may manage computers (it is on the server computer)
+  const nm = m => m.name || m.id;
+  const t = () => TXT[lang];
+
+  // history graphs (fetched every 10 s per machine from /history)
+  const hist = {};              // id -> {data, err, at}
+  function loadHist(id) {
+    const h = hist[id] || (hist[id] = { data: null, err: false, at: 0 });
+    if (Date.now() - h.at < 10000) return;
+    h.at = Date.now();
+    fetch("/history?id=" + encodeURIComponent(id), { cache: "no-store" })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(d => { h.data = d; h.err = false; })
+      .catch(() => { h.err = true; });
   }
+  function spark(d, key) {
+    const ys = (d[key] || []).map(Number);
+    const mean = d.base && d.base[key] ? Number(d.base[key].mean) || 0 : 0;
+    const top = key === "cpu" ? 100 : Math.max(1, ...ys, mean * 1.5);
+    const W = 120, H = 24, n = ys.length;
+    const y = v => (H - 1 - (Math.min(v, top) / top) * (H - 2)).toFixed(1);
+    const pts = ys.map((v, i) => `${(i / (n - 1) * W).toFixed(1)},${y(v)}`).join(" ");
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+      <line x1="0" x2="${W}" y1="${y(mean)}" y2="${y(mean)}" vector-effect="non-scaling-stroke"/>
+      <polyline points="${pts}" vector-effect="non-scaling-stroke"/></svg>`;
+  }
+  function histBlock(m) {
+    if (!("abn" in m) && !("learn" in m)) return "";     // server without history support
+    loadHist(m.id);
+    const h = hist[m.id], T = t();
+    const abn = Array.isArray(m.abn) ? m.abn : [];
+    const name = { cpu: "CPU", rx: T.down, tx: T.up };
+    let out = "";
+    if (abn.length) out += `<div class="abn">${esc(T.abn)}: ${abn.map(k => esc(name[k] || k)).join(", ")}</div>`;
+    else if (m.learn) out += `<div class="small">${esc(T.learning)}</div>`;
+    if (!h || (!h.data && !h.err)) return out + `<div class="small">${esc(T.histLoading)}</div>`;
+    if (h.err && !h.data) return out + `<div class="small">${esc(T.histErr)}</div>`;
+    const d = h.data;
+    if (!d.t || d.t.length < 2) return out + `<div class="small">${esc(T.histFew)}</div>`;
+    for (const k of ["cpu", "rx", "tx"]) {
+      const now = k === "cpu" ? `${Number(m.cpu).toFixed(0)}%` : Number(m[k]).toFixed(1);
+      out += `<div class="spark${abn.includes(k) ? " hot" : ""}"><span>${esc(name[k])}</span>${spark(d, k)}<span class="v">${now}</span></div>`;
+    }
+    return out + `<div class="small">${esc(T.histFoot)}</div>`;
+  }
+
+  // cards
+  // same limits as the server's status rules (server/main.cpp)
+  function meter(label, v, warnAt, critAt) {
+    const p = Math.min(100, Math.max(0, Number(v) || 0));
+    const cls = p >= critAt ? " hotter" : p >= warnAt ? " hot" : "";
+    return `<div class="row${cls}"><span>${label}</span><div class="bar"><i style="width:${p}%"></i></div><span class="v">${p.toFixed(0)}%</span></div>`;
+  }
+  // 45 s, 12 min, 3 h 5 min, 2 days 4 h (thai units in thai)
+  function fmtDur(ms) {
+    const U = t().unit, s = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
+    const m = Math.floor(s / 60), h = Math.floor(m / 60), d = Math.floor(h / 24);
+    if (s < 60) return `${s} ${U.s}`;
+    if (m < 60) return `${m} ${U.m}`;
+    if (h < 24) return m % 60 ? `${h} ${U.h} ${m % 60} ${U.m}` : `${h} ${U.h}`;
+    return h % 24 ? `${d} ${U.d(d)} ${h % 24} ${U.h}` : `${d} ${U.d(d)}`;
+  }
+  function card(m) {
+    const T = t(), st = STATES.includes(m.status) ? m.status : "offline";
+    const off = st === "offline";
+    const meta = [m.name ? m.id : "", m.ip, m.os].filter(Boolean).map(esc).join(" · ");
+    const edit = can ? `<button type="button" class="btn edit" data-key="edit:${esc(m.id)}"
+      aria-label="${esc(T.editBtn(nm(m)))}" title="${esc(T.editBtn(nm(m)))}">${ICON.pencil}</button>` : "";
+    return `<article class="card ${st}">
+      <div class="head"><div class="name">${esc(nm(m))}</div>${edit}</div>
+      <div class="sub"><span class="state ${st}"><span class="dot"></span>${esc(T[st])}</span><span class="meta">${meta}</span></div>
+      ${m.desc ? `<p class="desc">${esc(m.desc)}</p>` : ""}
+      ${off ? `<div class="offrow small">${esc(T.noData(fmtDur(m.age)))}</div>` : ""}
+      <div class="metrics">
+        ${meter("CPU", m.cpu, off ? 999 : 80, off ? 999 : 90)}
+        ${meter("RAM", m.ram, off ? 999 : 80, off ? 999 : 90)}
+        ${meter("Disk", m.disk, off ? 999 : 85, off ? 999 : 95)}
+        <div class="net"><span>${esc(T.down)} ${Number(m.rx).toFixed(1)} KB/s</span><span>${esc(T.up)} ${Number(m.tx).toFixed(1)} KB/s</span></div>
+      </div>
+      ${off ? "" : `<div class="hist">${histBlock(m)}</div>`}
+    </article>`;
+  }
+
+  // seat map
+  // layout.json: {"cols":6, "rows":4, "seats":{"A-01":[0,0]}, "labels":[{"c":2,"r":0,"w":1,"h":4,"text":"aisle"}]}
+  // seats are [column, row], row 0 = front. "rows" and "labels" are optional; a label needs text
+  // blocks may not overlap
+  // the server checks the same rules when the editor saves (check_layout in server/core.cpp)
+  const MAXC = 30, MAXR = 50;
+  const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+  const overlaps = (a, b) => a.c < b.c + b.w && b.c < a.c + a.w && a.r < b.r + b.h && b.r < a.r + a.h;
+  function checkLayout(j) {
+    if (!j || typeof j !== "object" || Array.isArray(j)) return null;
+    const cols = j.cols;
+    if (!isInt(cols, 1, MAXC)) return null;
+    if (j.rows !== undefined && !isInt(j.rows, 1, MAXR)) return null;
+    const maxR = j.rows || MAXR;
+    if (!j.seats || typeof j.seats !== "object" || Array.isArray(j.seats)) return null;
+    const seats = [], labels = [], all = [];
+    for (const [id, p] of Object.entries(j.seats)) {
+      if (!id || id.length > 64 || !Array.isArray(p) || p.length !== 2) return null;
+      const [c, r] = p;
+      if (!isInt(c, 0, cols - 1) || !isInt(r, 0, maxR - 1)) return null;
+      seats.push({ id, c, r });
+      all.push({ c, r, w: 1, h: 1 });
+    }
+    if (j.labels !== undefined) {
+      if (!Array.isArray(j.labels)) return null;
+      for (const x of j.labels) {
+        if (!x || typeof x !== "object") return null;
+        const { c, r, w, h } = x;
+        if (!isInt(c, 0, cols - 1) || !isInt(r, 0, maxR - 1) || !isInt(w, 1, cols - c) || !isInt(h, 1, maxR - r)) return null;
+        if (typeof x.text !== "string" || !x.text.trim()) return null;
+        labels.push({ c, r, w, h, text: (x.text || "").slice(0, 40) });
+        all.push({ c, r, w, h });
+      }
+    }
+    for (let a = 0; a < all.length; a++)
+      for (let b = a + 1; b < all.length; b++) if (overlaps(all[a], all[b])) return null;
+    const need = Math.max(1, ...all.map(b => b.r + b.h));
+    return { cols, rows: Math.max(j.rows || 0, need), seats, labels };
+  }
+  function loadLayout() {
+    fetch("/layout.json", { cache: "no-store" })
+      .then(r => {
+        if (r.status === 404) throw new Error("layoutMissing");
+        if (!r.ok) throw new Error("layoutFail");
+        return r.json().catch(() => { throw new Error("layoutBad"); });
+      })
+      .then(j => {
+        layout = checkLayout(j);
+        if (!layout) throw new Error("layoutBad");
+        layoutNote = null;
+        render();
+      })
+      .catch(e => {
+        layout = null;
+        layoutNote = TXT.th[e.message] ? e.message : "layoutFail";
+        render();
+      });
+  }
+  function renderMap(ms) {
+    const T = t();
+    const byId = new Map(ms.map(m => [m.id, m]));
+    const inLayout = new Set(layout.seats.map(s => s.id));
+    const labels = layout.labels.map(x =>
+      `<div class="tag" style="grid-column:${x.c + 1}/span ${x.w};grid-row:${x.r + 1}/span ${x.h}"${x.text ? "" : ' aria-hidden="true"'}>${esc(x.text)}</div>`).join("");
+    const tiles = layout.seats.map(s => {
+      const m = byId.get(s.id);
+      const st = m && STATES.includes(m.status) ? m.status : "none";
+      const info = m ? T[st] : T.seatNoData;
+      const extra = !m || st === "offline" ? ""
+        : (Array.isArray(m.abn) && m.abn.length) ? `<span class="flag">${esc(T.abn)}</span>`
+        : `<span>CPU ${Number(m.cpu).toFixed(0)}%</span>`;
+      return `<div class="seat ${st}" style="grid-column:${s.c + 1};grid-row:${s.r + 1}">
+        <b>${esc(m && m.name ? m.name : s.id)}</b><span>${esc(info)}</span>${extra}</div>`;
+    }).join("");
+    const out = ms.filter(m => !inLayout.has(m.id));
+    const outside = out.length
+      ? `<div class="outside"><h2>${esc(T.outside)} (${out.length})</h2><ul>${out.map(m =>
+          `<li class="${esc(m.status)}"><span class="dot"></span>${esc(nm(m))}: ${esc(T[m.status] || m.status)}</li>`).join("")}</ul></div>`
+      : "";
+    return `<div id="mapwrap" tabindex="0" role="region" aria-label="${esc(T.mapLabel)}"><div class="front">${esc(T.front)}</div>
+      <div class="room" style="grid-template-columns:repeat(${layout.cols},minmax(84px,1fr));grid-template-rows:repeat(${layout.rows},minmax(64px,auto))">${labels}${tiles}</div></div>${outside}`;
+  }
+
+  // seat map editor
+  // works on a copy of the layout; nothing changes on the server until save
+  // blocks are seats (1 x 1, one computer) and labels (w x h, text such as "aisle")
+  let ed = null;     // {cols, rows, seats, labels, sel, dirty, msg, msgBad, msgExtra, lang, trayKey}
+  let drag = null;   // pointer drag in progress
+  function edStart() {
+    const L = layout || { cols: 6, rows: 5, seats: [], labels: [] };
+    ed = { cols: L.cols, rows: L.rows, seats: L.seats.map(x => ({ ...x })), labels: L.labels.map(x => ({ ...x })),
+           sel: null, dirty: false, msg: "", msgBad: false, msgExtra: "", lang: null, trayKey: "" };
+    mapMsg = null;
+    render();
+    $("ed-addlb").focus();
+  }
+  async function edStop(force) {
+    if (!ed) return;
+    if (ed.dirty && !force) {           // ask first; "keep editing" is the safe default
+      const T = t();
+      if (!await ask({ title: T.discard, body: T.discardHint, yes: T.discardYes, no: T.keep, back: () => $("ed-cancel") })) return;
+      if (!ed) return;
+    }
+    ed = null; drag = null;
+    render();
+    $("edopen").focus();
+  }
+  const edItem = (k, i) => k === "seat" ? ed.seats[i] : ed.labels[i];
+  const edBlocks = () => [
+    ...ed.seats.map((x, i) => ({ k: "seat", i, c: x.c, r: x.r, w: 1, h: 1 })),
+    ...ed.labels.map((x, i) => ({ k: "label", i, c: x.c, r: x.r, w: x.w, h: x.h })),
+  ];
+  // true when block (k, i) may sit at c, r with size w x h
+  function edFits(k, i, c, r, w, h) {
+    if (c < 0 || r < 0 || w < 1 || h < 1 || c + w > ed.cols || r + h > ed.rows) return false;
+    const me = { c, r, w, h };
+    return !edBlocks().some(b => !(b.k === k && b.i === i) && overlaps(me, b));
+  }
+  function edFree() {
+    for (let r = 0; r < ed.rows; r++)
+      for (let c = 0; c < ed.cols; c++) if (edFits(null, -1, c, r, 1, 1)) return { c, r };
+    return null;
+  }
+  function edSay(key, bad, extra) {
+    ed.msg = key; ed.msgBad = !!bad; ed.msgExtra = extra || "";
+    const el = $("ed-msg");
+    if (!el) return;
+    el.textContent = key ? t()[key] + (ed.msgExtra ? ": " + ed.msgExtra : "") : "";
+    el.className = ed.msgBad ? "bad" : "";
+  }
+  function edLabel(k, x) {
+    const T = t();
+    return k === "seat"
+      ? `${T.seat} ${x.id}, ${T.at(x.c + 1, x.r + 1)}`
+      : `${T.label}${x.text ? " " + x.text : ""}, ${T.at(x.c + 1, x.r + 1)}, ${T.size(x.w, x.h)}`;
+  }
+  function edFocusSel() {
+    if (!ed || !ed.sel) return;
+    const el = $("ed-grid").querySelector(`.blk[data-k="${ed.sel.k}"][data-i="${ed.sel.i}"]`);
+    if (el) el.focus();
+  }
+  function stepper(id, label, value) {
+    const T = t();
+    return `<div class="stepper" role="group" aria-label="${esc(label)}"><span>${esc(label)}</span>
+      <button type="button" class="btn sq" id="${id}-" aria-label="${esc(T.fewer + " " + label)}">−</button>
+      <output id="${id}v" aria-live="polite">${value}</output>
+      <button type="button" class="btn sq" id="${id}+" aria-label="${esc(T.more + " " + label)}">+</button></div>`;
+  }
+
+  // static parts, rebuilt only when the language changes
+  function edBuild() {
+    const T = t();
+    ed.lang = lang; ed.trayKey = "";
+    $("ed").innerHTML = `
+      <div class="edbar" id="ed-bar">
+        ${stepper("ed-c", T.cols, ed.cols)}
+        ${stepper("ed-r", T.rows, ed.rows)}
+        <button type="button" class="btn" id="ed-addlb">+ ${esc(T.addLabel)}</button>
+        <span class="grow"></span>
+        <div class="acts">
+          <button type="button" class="btn" id="ed-dl">${esc(T.download)}</button>
+          <button type="button" class="btn" id="ed-cancel">${esc(T.cancel)}</button>
+          <button type="button" class="btn primary" id="ed-save">${esc(T.save)}</button>
+        </div>
+      </div>
+      <p class="edhint">${esc(T.edHint)}</p>
+      <p id="ed-msg" role="status" aria-live="polite"></p>
+      <div class="mapwrap"><div class="front">${esc(T.front)}</div>
+        <div class="room ed" id="ed-grid" role="group" aria-label="${esc(T.editArea)}"></div></div>
+      <div class="edside">
+        <section class="panel" id="ed-insp" aria-live="polite"></section>
+        <section class="panel">
+          <h2>${esc(T.unplaced)}</h2>
+          <div id="ed-tray"></div>
+          <form id="ed-addf">
+            <label for="ed-newid">${esc(T.addById)}</label>
+            <div class="addrow"><input type="text" id="ed-newid" maxlength="64" autocomplete="off" spellcheck="false">
+              <button type="submit" class="btn">${esc(T.add)}</button></div>
+          </form>
+        </section>
+      </div>`;
+    $("ed-bar").addEventListener("click", e => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      if (b.id === "ed-c-") edResizeRoom(-1, 0);
+      else if (b.id === "ed-c+") edResizeRoom(1, 0);
+      else if (b.id === "ed-r-") edResizeRoom(0, -1);
+      else if (b.id === "ed-r+") edResizeRoom(0, 1);
+      else if (b.id === "ed-addlb") edAddLabel();
+      else if (b.id === "ed-dl") edDownload();
+      else if (b.id === "ed-cancel") edStop(false);
+      else if (b.id === "ed-save") edSave();
+    });
+    $("ed-tray").addEventListener("click", e => {
+      const b = e.target.closest("button[data-add]");
+      if (b) edAddSeat(b.dataset.add);
+    });
+    $("ed-addf").addEventListener("submit", e => {
+      e.preventDefault();
+      if (edAddSeat($("ed-newid").value, true)) $("ed-newid").value = "";
+    });
+    wireInspector($("ed-insp"));
+    wireGrid($("ed-grid"));
+    edDraw();
+    edSay(ed.msg, ed.msgBad, ed.msgExtra);
+  }
+
+  // grid + inspector + tray; keeps keyboard focus where it was
+  function edDraw() {
+    const T = t();
+    const act = document.activeElement;
+    const actBlk = act && act.classList && act.classList.contains("blk");
+    const actId = act && act.id;
+    $("ed-cv").textContent = ed.cols;
+    $("ed-rv").textContent = ed.rows;
+    let h = "";
+    for (let r = 0; r < ed.rows; r++)
+      for (let c = 0; c < ed.cols; c++)
+        h += `<div class="cell" data-c="${c}" data-r="${r}" style="grid-column:${c + 1};grid-row:${r + 1}"></div>`;
+    const on = (k, i) => !!ed.sel && ed.sel.k === k && ed.sel.i === i;
+    ed.labels.forEach((x, i) => {
+      h += `<div class="blk tag" data-k="label" data-i="${i}" tabindex="0" role="button" aria-pressed="${on("label", i)}"
+        aria-label="${esc(edLabel("label", x))}" style="grid-column:${x.c + 1}/span ${x.w};grid-row:${x.r + 1}/span ${x.h}">
+        <span class="txt">${esc(x.text)}</span><span class="hdl" aria-hidden="true"></span></div>`;
+    });
+    ed.seats.forEach((x, i) => {
+      h += `<div class="blk seat-e" data-k="seat" data-i="${i}" tabindex="0" role="button" aria-pressed="${on("seat", i)}"
+        aria-label="${esc(edLabel("seat", x))}" style="grid-column:${x.c + 1};grid-row:${x.r + 1}"><b>${esc(x.id)}</b></div>`;
+    });
+    const g = $("ed-grid");
+    g.style.gridTemplateColumns = `repeat(${ed.cols}, minmax(84px, 1fr))`;
+    g.style.gridTemplateRows = `repeat(${ed.rows}, 64px)`;
+    g.innerHTML = h;
+    edInspector();
+    edTray(true);
+    if (actBlk) edFocusSel();
+    else if (actId && $(actId) && $(actId) !== act) $(actId).focus();
+  }
+
+  function edInspector() {
+    const T = t(), box = $("ed-insp");
+    if (!ed.sel) {
+      box.innerHTML = `<h2>${esc(T.selTitle)}</h2><p class="small">${esc(T.selNone)}</p>`;
+      return;
+    }
+    const x = edItem(ed.sel.k, ed.sel.i);
+    if (ed.sel.k === "seat") {
+      box.innerHTML = `<h2>${esc(T.seat)}: ${esc(x.id)}</h2><p class="small">${esc(T.at(x.c + 1, x.r + 1))}</p>
+        <label for="ed-id">${esc(T.seatId)}</label>
+        <input type="text" id="ed-id" maxlength="64" value="${esc(x.id)}" autocomplete="off" spellcheck="false">
+        <button type="button" class="btn danger" id="ed-rm">${esc(T.remove)}</button>`;
+    } else {
+      box.innerHTML = `<h2>${esc(T.label)}</h2><p class="small">${esc(T.at(x.c + 1, x.r + 1))}</p>
+        <label for="ed-lbl">${esc(T.labelText)}</label>
+        <input type="text" id="ed-lbl" maxlength="40" value="${esc(x.text)}" placeholder="${esc(T.labelPh)}" autocomplete="off">
+        ${stepper("ed-w", T.width, x.w)}${stepper("ed-h", T.height, x.h)}
+        <div><button type="button" class="btn danger" id="ed-rm">${esc(T.remove)}</button></div>`;
+    }
+  }
+  function wireInspector(box) {
+    box.addEventListener("click", e => {
+      const b = e.target.closest("button");
+      if (!b || !ed.sel) return;
+      const { k, i } = ed.sel, x = edItem(k, i);
+      if (b.id === "ed-rm") return edRemove(k, i);
+      const d = { "ed-w-": [-1, 0], "ed-w+": [1, 0], "ed-h-": [0, -1], "ed-h+": [0, 1] }[b.id];
+      if (d && k === "label") edSet(k, i, x.c, x.r, x.w + d[0], x.h + d[1]);
+    });
+    box.addEventListener("input", e => {
+      if (e.target.id !== "ed-lbl" || !ed.sel) return;
+      const x = edItem("label", ed.sel.i);
+      x.text = e.target.value.slice(0, 40);
+      ed.dirty = true;
+      // update the block in place: a full redraw would move the text cursor
+      const el = $("ed-grid").querySelector(`.blk[data-k="label"][data-i="${ed.sel.i}"]`);
+      if (el) { el.querySelector(".txt").textContent = x.text; el.setAttribute("aria-label", edLabel("label", x)); }
+    });
+    box.addEventListener("change", e => {
+      if (e.target.id !== "ed-id" || !ed.sel) return;
+      const x = edItem("seat", ed.sel.i), id = e.target.value.trim();
+      const bad = !id ? "idEmpty" : id.length > 64 ? "idLong"
+        : ed.seats.some((s, j) => j !== ed.sel.i && s.id === id) ? "idTaken" : "";
+      if (bad) { e.target.value = x.id; edSay(bad, true); return; }
+      if (id !== x.id) { x.id = id; ed.dirty = true; edSay(""); edDraw(); }
+    });
+  }
+
+  function edTray(force) {
+    const T = t();
+    const placed = new Set(ed.seats.map(x => x.id));
+    const ids = (lastDt ? lastDt.machines : []).map(m => String(m.id)).filter(id => !placed.has(id));
+    const key = ids.join("\n");
+    if (!force && key === ed.trayKey) return;
+    ed.trayKey = key;
+    const act = document.activeElement, actAdd = act && act.dataset && act.dataset.add;
+    $("ed-tray").innerHTML = ids.length
+      ? `<ul class="chips">${ids.map(id => `<li><button type="button" class="btn" data-add="${esc(id)}">+ ${esc(id)}</button></li>`).join("")}</ul>`
+      : `<p class="small">${esc(T.unplacedNone)}</p>`;
+    if (actAdd) for (const b of $("ed-tray").querySelectorAll("button[data-add]")) if (b.dataset.add === actAdd) b.focus();
+  }
+
+  // edits
+  function edSet(k, i, c, r, w, h) {      // move and/or resize one block; false if it does not fit
+    if (!edFits(k, i, c, r, w, h)) { edSay("noFit", true); return false; }
+    const x = edItem(k, i);
+    x.c = c; x.r = r;
+    if (k === "label") { x.w = w; x.h = h; }
+    ed.sel = { k, i }; ed.dirty = true;
+    edSay("");
+    edDraw();
+    return true;
+  }
+  function edSelect(k, i) {
+    ed.sel = k ? { k, i } : null;
+    edDraw();
+    if (k) edFocusSel();
+  }
+  function edResizeRoom(dc, dr) {
+    const nc = ed.cols + dc, nr = ed.rows + dr;
+    if (nc < 1 || nc > MAXC || nr < 1 || nr > MAXR) return;
+    if (edBlocks().some(b => b.c + b.w > nc || b.r + b.h > nr)) { edSay("shrinkBlocked", true); return; }
+    ed.cols = nc; ed.rows = nr; ed.dirty = true;
+    edSay("");
+    edDraw();
+  }
+  function edAddSeat(raw, fromForm) {
+    const id = String(raw).trim();
+    const bad = !id ? "idEmpty" : id.length > 64 ? "idLong" : ed.seats.some(x => x.id === id) ? "idTaken" : "";
+    if (bad) { edSay(bad, true); return false; }
+    const at = edFree();
+    if (!at) { edSay("noRoom", true); return false; }
+    ed.seats.push({ id, c: at.c, r: at.r });
+    ed.sel = { k: "seat", i: ed.seats.length - 1 }; ed.dirty = true;
+    edSay("");
+    edDraw();
+    if (!fromForm) edFocusSel();
+    return true;
+  }
+  function edAddLabel() {
+    const at = edFree();
+    if (!at) { edSay("noRoom", true); return; }
+    ed.labels.push({ c: at.c, r: at.r, w: 1, h: 1, text: "" });
+    ed.sel = { k: "label", i: ed.labels.length - 1 }; ed.dirty = true;
+    edSay("");
+    edDraw();
+    $("ed-lbl").focus();      // a label is its text: type it straight away
+  }
+  function edRemove(k, i) {
+    (k === "seat" ? ed.seats : ed.labels).splice(i, 1);
+    ed.sel = null; ed.dirty = true;
+    edSay("removed");
+    edDraw();
+    $("ed-addlb").focus();
+  }
+
+  // pointer: drag to move, drag the corner grip to resize, tap a block then tap a cell
+  function cellAt(g, x, y) {
+    const R = g.getBoundingClientRect(), cs = getComputedStyle(g);
+    const gx = parseFloat(cs.columnGap) || 0, gy = parseFloat(cs.rowGap) || 0;
+    const cw = (R.width - gx * (ed.cols - 1)) / ed.cols, rh = (R.height - gy * (ed.rows - 1)) / ed.rows;
+    return { c: Math.floor((x - R.left) / (cw + gx)), r: Math.floor((y - R.top) / (rh + gy)) };
+  }
+  function wireGrid(g) {
+    g.addEventListener("pointerdown", e => {
+      const el = e.target.closest(".blk");
+      if (!el || e.button !== 0) return;
+      const k = el.dataset.k, i = +el.dataset.i, x = edItem(k, i), at = cellAt(g, e.clientX, e.clientY);
+      drag = { el, k, i, size: e.target.classList.contains("hdl"), x0: e.clientX, y0: e.clientY,
+               dc: at.c - x.c, dr: at.r - x.r, moved: false, ok: true, c: x.c, r: x.r, w: x.w || 1, h: x.h || 1 };
+      el.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    g.addEventListener("pointermove", e => {
+      if (!drag) return;
+      if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 5) return;
+      drag.moved = true;
+      const x = edItem(drag.k, drag.i), at = cellAt(g, e.clientX, e.clientY);
+      if (drag.size) {
+        drag.w = Math.max(1, Math.min(ed.cols - x.c, at.c - x.c + 1));
+        drag.h = Math.max(1, Math.min(ed.rows - x.r, at.r - x.r + 1));
+      } else {
+        drag.c = Math.max(0, Math.min(ed.cols - drag.w, at.c - drag.dc));
+        drag.r = Math.max(0, Math.min(ed.rows - drag.h, at.r - drag.dr));
+      }
+      drag.ok = edFits(drag.k, drag.i, drag.c, drag.r, drag.w, drag.h);
+      drag.el.style.gridColumn = `${drag.c + 1}/span ${drag.w}`;
+      drag.el.style.gridRow = `${drag.r + 1}/span ${drag.h}`;
+      drag.el.classList.add("dragging");
+      drag.el.classList.toggle("bad", !drag.ok);
+    });
+    const end = e => {
+      if (!drag) return;
+      const d = drag;
+      drag = null;
+      if (!d.moved) return edSelect(d.k, d.i);
+      if (e.type === "pointerup" && d.ok) { edSet(d.k, d.i, d.c, d.r, d.w, d.h); edSay(d.size ? "resized" : "moved"); edFocusSel(); }
+      else { if (e.type === "pointerup") edSay("noFit", true); edDraw(); }
+    };
+    g.addEventListener("pointerup", end);
+    g.addEventListener("pointercancel", end);
+    g.addEventListener("click", e => {
+      const cell = e.target.closest(".cell");
+      if (!cell || !ed.sel) return;
+      const x = edItem(ed.sel.k, ed.sel.i);
+      if (edSet(ed.sel.k, ed.sel.i, +cell.dataset.c, +cell.dataset.r, x.w || 1, x.h || 1)) { edSay("moved"); edFocusSel(); }
+    });
+    g.addEventListener("keydown", e => {
+      const el = e.target.closest(".blk");
+      if (!el) return;
+      const k = el.dataset.k, i = +el.dataset.i, x = edItem(k, i);
+      const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+      if (d) {
+        e.preventDefault();
+        const ok = e.shiftKey && k === "label"
+          ? edSet(k, i, x.c, x.r, x.w + d[0], x.h + d[1])
+          : edSet(k, i, x.c + d[0], x.r + d[1], x.w || 1, x.h || 1);
+        if (ok) edFocusSel();
+      } else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); edSelect(k, i); }
+      else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); edRemove(k, i); }
+      else if (e.key === "Escape") { e.preventDefault(); ed.sel = null; edDraw(); el.blur(); $("ed-addlb").focus(); }
+    });
+  }
+
+  // output
+  function edOut() {
+    const o = { cols: ed.cols, rows: ed.rows, seats: {} };
+    for (const x of [...ed.seats].sort((a, b) => a.r - b.r || a.c - b.c)) o.seats[x.id] = [x.c, x.r];
+    if (ed.labels.length)
+      o.labels = ed.labels.map(x => ({ c: x.c, r: x.r, w: x.w, h: x.h, text: x.text.trim() }));
+    return o;
+  }
+  // one seat or label per line, like the server writes it
+  function fmtLayout(o) {
+    const q = JSON.stringify, seats = Object.entries(o.seats);
+    let s = `{\n  "cols": ${o.cols},\n  "rows": ${o.rows},\n  "seats": {`;
+    s += seats.length ? seats.map(([id, p]) => `\n    ${q(id)}: [${p[0]}, ${p[1]}]`).join(",") + "\n  }" : "}";
+    if (o.labels) s += `,\n  "labels": [` + o.labels.map(x =>
+      `\n    {"c": ${x.c}, "r": ${x.r}, "w": ${x.w}, "h": ${x.h}${x.text ? `, "text": ${q(x.text)}` : ""}}`).join(",") + "\n  ]";
+    return s + "\n}\n";
+  }
+  // false (and points at it) when a label has no text yet
+  function edReady() {
+    const i = ed.labels.findIndex(x => !x.text.trim());
+    if (i < 0) return true;
+    ed.sel = { k: "label", i };
+    edDraw();
+    edSay("textEmpty", true);
+    $("ed-lbl").focus();
+    return false;
+  }
+  function edDownload() {
+    if (!edReady()) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([fmtLayout(edOut())], { type: "application/json" }));
+    a.download = "layout.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  async function edSave() {
+    if (!edReady()) return;
+    const out = edOut();
+    edSay("saving");
+    let r, j = null;
+    try {
+      r = await fetch("/layout.json", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(out), cache: "no-store" });
+      j = await r.json().catch(() => null);
+    } catch (e) { if (ed) edSay("saveFail", true); return; }
+    if (!ed) return;
+    if (r.status === 403) return edSay("saveLocal", true);
+    // an older server answers any request to /layout.json with the file, so look for {"ok":true}
+    if (!r.ok || !j || j.ok !== true) return edSay("saveFail", true, j && j.error ? j.error : "HTTP " + r.status);
+    layout = checkLayout(out);
+    layoutNote = null;
+    ed = null;
+    view = "map"; store.set("ci-view", view);
+    mapMsg = "saved";
+    setTimeout(() => { mapMsg = null; render(); }, 5000);
+    render();
+    $("edopen").focus();
+  }
+
+  // the page's own yes/no pop-up
+  // not confirm(): some browsers block or auto-answer it. resolves true only for "yes"
+  // esc, the backdrop and "no" all mean no. "no" has focus first
+  let askDone = null;
+  function ask({ title, body, code, yes, no, back }) {
+    $("askq").textContent = title;
+    $("askp").textContent = body || "";
+    $("askc").textContent = code || "";
+    $("askc").hidden = !code;
+    $("ask-yes").textContent = yes;
+    $("ask-no").textContent = no;
+    $("askdlg").showModal();
+    $("ask-no").focus();
+    return new Promise(res => {
+      askDone = v => {
+        const el = back && back();
+        if (!v && el) el.focus();
+        res(v);
+      };
+    });
+  }
+  // answer straight from the button / esc, not from the dialog's "close" event (that one can
+  // arrive late, e.g. in a background tab)
+  function answer(v) {
+    const done = askDone;
+    askDone = null;
+    if ($("askdlg").open) $("askdlg").close();
+    if (done) done(v);
+  }
+
+  // managing computers: name, description, remove, add back
+  // only on the server computer (get /me says so); the server checks again on every change
+  async function post(path, body) {
+    try {
+      const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
+      const j = await r.json().catch(() => null);
+      return { ok: r.ok && !!j && j.ok === true, status: r.status, error: j && j.error };
+    } catch (e) { return { ok: false, status: 0 }; }
+  }
+  const editBtnOf = id => [...document.querySelectorAll("button[data-key]")].find(b => b.dataset.key === "edit:" + id);
+  let mId = null;               // computer open in the details pop-up
+  function openEdit(id) {
+    const T = t(), m = lastDt && lastDt.machines.find(x => x.id === id);
+    if (!m) return;
+    mId = id;
+    $("mq").textContent = nm(m);
+    $("mid").textContent = T.mIdNote(id);
+    $("mnamel").textContent = T.mName;
+    $("mnameh").textContent = T.mNameHint;
+    $("mdescl").textContent = T.mDesc;
+    $("mrm").textContent = T.removeBtn;
+    $("mcancel").textContent = T.mCancel;
+    $("msave").textContent = T.mSave;
+    $("mname").value = m.name || "";
+    $("mname").placeholder = id;
+    $("mdesc").value = m.desc || "";
+    $("merr").textContent = "";
+    $("mdlg").showModal();
+    $("mname").focus();
+  }
+  function closeEdit(refocus) {
+    const id = mId;
+    mId = null;
+    if ($("mdlg").open) $("mdlg").close();
+    if (refocus && id) { const b = editBtnOf(id); if (b) b.focus(); }
+  }
+  async function saveEdit() {
+    const id = mId, name = $("mname").value.trim(), desc = $("mdesc").value.trim();
+    if (!id) return;
+    $("msave").disabled = true;
+    const r = await post("/meta", { id, name, desc });
+    $("msave").disabled = false;
+    if (!r.ok) {
+      $("merr").textContent = t().mSaveFail + (r.status === 403 ? ": " + t().localOnly() : r.error ? ": " + r.error : "");
+      return;
+    }
+    const m = lastDt && lastDt.machines.find(x => x.id === id);
+    if (m) { m.name = name; m.desc = desc; }
+    render();
+    closeEdit(true);
+  }
+  async function removeMachine(id) {
+    const T = t();
+    closeEdit(false);
+    const m = lastDt && lastDt.machines.find(x => x.id === id), label = m ? nm(m) : id;
+    const ok = await ask({ title: T.rmTitle(label), body: T.rmBody, yes: T.rmYes, no: T.rmNo, back: () => editBtnOf(id) });
+    if (!ok) return;
+    const r = await post("/forget", { id });
+    if (r.ok) {
+      if (lastDt) {
+        lastDt.machines = lastDt.machines.filter(x => x.id !== id);
+        lastDt.removed = [...(lastDt.removed || []).filter(x => x.id !== id), { id, name: m ? m.name : "" }];
+      }
+      notice = { key: "rmDone", id: label, act: { label: "addBack", id } };
+    } else notice = { key: "rmFail", id: label, bad: true };
+    render();
+    $(notice.act ? "noticea" : "noticex").focus();
+  }
+  async function restoreMachine(id) {
+    const r = await post("/restore", { id });
+    const x = lastDt && (lastDt.removed || []).find(y => y.id === id), label = x && x.name ? x.name : id;
+    if (r.ok) {
+      if (lastDt) lastDt.removed = (lastDt.removed || []).filter(y => y.id !== id);
+      notice = { key: "backDone", id: label };
+    } else notice = { key: "backFail", id: label, bad: true };
+    render();
+    $("noticex").focus();
+  }
+  let showRemoved = false;      // the removed list stays folded until asked for
+  function removedHTML() {
+    const T = t(), list = lastDt && Array.isArray(lastDt.removed) ? lastDt.removed : [];
+    if (!list.length) return "";
+    const btn = `<button type="button" class="linkbtn" data-key="toggle-removed" aria-expanded="${showRemoved}">${esc((showRemoved ? T.hideRemoved : T.showRemoved)(list.length))}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`;
+    if (!showRemoved) return btn;
+    return btn + `<div class="panel"><p class="small">${esc(T.removedHint)}</p><ul>${list.map(x =>
+      `<li><b>${esc(x.name || x.id)}</b><span class="meta">${x.name ? esc(x.id) : ""}</span>${can
+        ? `<button type="button" class="btn" data-key="back:${esc(x.id)}">${esc(T.addBack)}</button>` : ""}</li>`).join("")}</ul></div>`;
+  }
+
+  // cards are redrawn every second. skip a redraw that changes nothing, never redraw under a
+  // pressed mouse button (the click would be lost), and keep focus on a button that has it
+  let pressed = null;           // element under a pressed mouse button
+  function setHTML(el, html) {
+    if (el._html === html || (pressed && el.contains(pressed))) return;
+    const f = document.activeElement, key = f && el.contains(f) && f.dataset ? f.dataset.key : null;
+    el.innerHTML = html;
+    el._html = html;
+    if (key) for (const b of el.querySelectorAll("[data-key]")) if (b.dataset.key === key) b.focus();
+  }
+
+  // page
+  function render() {
+    const T = t();
+    document.documentElement.lang = lang;
+    document.documentElement.dataset.theme = theme;
+    for (const el of document.querySelectorAll("[data-t]")) el.textContent = T[el.dataset.t];
+    $("lang").innerHTML = ICON.globe + `<span class="code" aria-hidden="true">${T.langCode}</span>`;
+    $("lang").setAttribute("aria-label", T.langLabel);
+    $("lang").title = T.langLabel;
+    // the icon shows the mode you switch to: moon in light mode, sun in dark mode
+    const tl = theme === "dark" ? T.light : T.dark;
+    $("theme").innerHTML = theme === "dark" ? ICON.sun : ICON.moon;
+    $("theme").setAttribute("aria-label", tl);
+    $("theme").title = tl;
+    $("views").hidden = !!ed;
+    for (const b of document.querySelectorAll("#views button")) b.setAttribute("aria-pressed", String(b.dataset.v === view));
+    $("lnote").hidden = !layoutNote || !!ed;
+    $("lnote").textContent = layoutNote ? T[layoutNote] : "";
+
+    $("conndot").className = "dot " + ({ connecting: "wait", connected: "live", lost: "lost" })[conn];
+    $("conntext").textContent = T[conn === "lost" ? "connecting" : conn];
+    $("lost").hidden = conn !== "lost";
+    $("lost").textContent = T.lost;
+    // added back elsewhere (another tab): the "add it back" notice has done its job
+    if (notice && notice.act && lastDt && !(lastDt.removed || []).some(x => x.id === notice.act.id)) notice = null;
+    $("notice").hidden = !notice;
+    $("notice").classList.toggle("bad", !!(notice && notice.bad));
+    $("noticep").textContent = notice ? T[notice.key](notice.id) : "";
+    $("noticea").hidden = !(notice && notice.act && can);
+    $("noticea").textContent = notice && notice.act ? T[notice.act.label] : "";
+    $("noticex").textContent = T.close;
+    const rh = ed ? "" : removedHTML();
+    $("removed").hidden = !rh;
+    setHTML($("removed"), rh);
+
+    const ms = lastDt ? lastDt.machines : [];
+    const n = { ok: 0, warn: 0, crit: 0, offline: 0 };
+    for (const m of ms) if (m.status in n) n[m.status]++;
+    $("counts").innerHTML = lastDt ? STATES.map(s =>
+      `<div class="count ${n[s] ? s : "zero"}"><b>${n[s]}</b><span>${esc(T[s])}</span></div>`).join("") : "";
+
+    $("mapbar").hidden = !!ed || view !== "map";
+    $("edopen").innerHTML = ICON.pencil + `<span>${esc(layout ? T.edit : T.create)}</span>`;
+    $("edopen").classList.toggle("primary", !layout);
+    $("mapmsg").textContent = mapMsg ? T[mapMsg] : "";
+    $("ed").hidden = !ed;
+    if (ed) {
+      $("grid").hidden = true; $("map").hidden = true;
+      if (ed.lang !== lang) edBuild(); else edTray(false);
+      return;
+    }
+
+    const mapOn = view === "map";
+    $("grid").hidden = mapOn;
+    $("map").hidden = !mapOn;
+    if (!lastDt) {
+      $("grid").hidden = false; $("map").hidden = true;
+      setHTML($("grid"), `<div class="empty" style="grid-column:1/-1"><p>${esc(T.waiting)}</p></div>`);
+      return;
+    }
+    if (!ms.length) {
+      $("grid").hidden = false; $("map").hidden = true;
+      const host = location.hostname || "<server-ip>";
+      setHTML($("grid"), `<div class="empty" style="grid-column:1/-1"><h2>${esc(T.empty)}</h2>
+        <p>${esc(T.emptyHint)}</p><code>./agent --host ${esc(host)}</code></div>`);
+      return;
+    }
+    if (mapOn) setHTML($("map"), layout ? renderMap(ms)
+      : `<div class="empty"><h2>${esc(T.noMap)}</h2><p>${esc(T.noMapHint)}</p></div>`);
+    else setHTML($("grid"), ms.map(card).join(""));
+  }
+
+  for (const b of document.querySelectorAll("#views button"))
+    b.addEventListener("click", () => { view = b.dataset.v; store.set("ci-view", view); render(); });
+  $("lang").addEventListener("click", () => { lang = lang === "th" ? "en" : "th"; store.set("ci-lang", lang); render(); });
+  $("theme").addEventListener("click", () => { theme = theme === "dark" ? "light" : "dark"; store.set("ci-theme", theme); render(); });
+  $("edopen").addEventListener("click", edStart);
+  $("ask-yes").addEventListener("click", () => answer(true));
+  $("ask-no").addEventListener("click", () => answer(false));
+  $("askdlg").addEventListener("click", e => {
+    const r = $("askdlg").getBoundingClientRect();     // a click on the dialog's own padding also targets it
+    if (e.target === $("askdlg") && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) answer(false);
+  });
+  $("askdlg").addEventListener("cancel", e => { e.preventDefault(); answer(false); });   // esc
+  $("askdlg").addEventListener("close", () => { if (askDone) answer(false); });
+  $("grid").addEventListener("click", e => {
+    const b = e.target.closest("button[data-key^='edit:']");
+    if (b) openEdit(b.dataset.key.slice(5));
+  });
+  $("removed").addEventListener("click", e => {
+    if (e.target.closest("button[data-key='toggle-removed']")) { showRemoved = !showRemoved; render(); return; }
+    const b = e.target.closest("button[data-key^='back:']");
+    if (b) restoreMachine(b.dataset.key.slice(5));
+  });
+  addEventListener("pointerdown", e => { pressed = e.target; }, true);
+  for (const ev of ["pointerup", "pointercancel"]) addEventListener(ev, () => { pressed = null; }, true);
+  $("noticex").addEventListener("click", () => { notice = null; render(); });
+  $("noticea").addEventListener("click", () => { if (notice && notice.act) restoreMachine(notice.act.id); });
+  // details pop-up: esc, cancel and the backdrop close it without saving
+  $("mform").addEventListener("submit", e => { e.preventDefault(); saveEdit(); });
+  $("mcancel").addEventListener("click", () => closeEdit(true));
+  $("mrm").addEventListener("click", () => { if (mId) removeMachine(mId); });
+  $("mdlg").addEventListener("cancel", e => { e.preventDefault(); closeEdit(true); });
+  $("mdlg").addEventListener("click", e => {
+    const r = $("mdlg").getBoundingClientRect();
+    if (e.target === $("mdlg") && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) closeEdit(true);
+  });
+  addEventListener("beforeunload", e => { if (ed && ed.dirty) { e.preventDefault(); e.returnValue = ""; } });
+
+  function connect() {
+    const host = location.hostname || "127.0.0.1";
+    const ws = new WebSocket("ws://" + host + ":8080/dashboard");
+    ws.onopen = () => { conn = "connected"; render(); };
+    ws.onmessage = (e) => {
+      let dt;
+      try { dt = JSON.parse(e.data); } catch (err) { return; }
+      if (!dt || !Array.isArray(dt.machines)) return;
+      dt.machines.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+      lastDt = dt;
+      render();
+    };
+    ws.onclose = () => { if (conn !== "connecting" || lastDt) conn = "lost"; render(); setTimeout(connect, 2000); };
+  }
+  render();
+  loadLayout();
   connect();
-</script>
+  fetch("/me", { cache: "no-store" }).then(r => r.json()).then(j => { can = j && j.local === true; render(); }).catch(() => {});
+  </script>
 </body>
 </html>
