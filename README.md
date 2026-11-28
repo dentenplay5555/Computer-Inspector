@@ -66,7 +66,9 @@ One script builds everything, starts the server and opens the dashboard:
 run.bat             # Windows
 ```
 
-Add `--agent` to also start an agent on the same computer (handy for testing without
+The first time, it asks for a teacher password (it protects the dashboard; typing is
+hidden). `--set-password` sets a new one before starting. Add `--agent` to also start an
+agent on the same computer (handy for testing without
 other PCs). `./run.sh --help` lists the other options. Ctrl+C stops everything on
 Mac / Linux; on Windows, close the server window.
 
@@ -183,8 +185,9 @@ file (`run.sh --agent` and `run.bat --agent` do this, like `--pin-file`).
 
 The dashboard only shows student PCs after logging in with the teacher password.
 
-- **First time:** set the password in the server window, with `server --set-password`
-  (typing is hidden), or in the dashboard opened on the server PC itself. Until then the
+- **First time:** `run.sh` / `run.bat` ask for it before starting the server (typing is
+  hidden; `--set-password` changes it later). It can also be set in the server window,
+  with `server --set-password`, or in the dashboard opened on the server PC itself. Until then the
   dashboard on other PCs says to do that. At least 8 characters.
 - The password is stored only as a salted PBKDF2-SHA256 hash (600,000 rounds) in
   `auth.json` next to the server (owner-only on Mac / Linux). Checking it takes a moment on
