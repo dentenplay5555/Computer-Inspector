@@ -15,66 +15,39 @@ Start the server first, with a learning period shorter than --jump-at, e.g.:
 
 Only the Python standard library is used (no internet needed).
 """
-import argparse, base64, json, os, random, socket, struct, threading, time
+import argparse, json, os, random, sys, threading, time
 
-def ws_connect(host, port, path, wait_s=10):
-    # retry while the server is still starting up
-    deadline = time.time() + wait_s
-    while True:
-        try:
-            s = socket.create_connection((host, port))
-            break
-        except ConnectionRefusedError:
-            if time.time() > deadline:
-                raise
-            time.sleep(0.5)
-    key = base64.b64encode(os.urandom(16)).decode()
-    s.sendall((f"GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\n"
-               f"Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
-    resp = b""
-    while b"\r\n\r\n" not in resp:
-        chunk = s.recv(1)
-        if not chunk:
-            raise ConnectionError("server closed during handshake")
-        resp += chunk
-    if b" 101 " not in resp.split(b"\r\n")[0]:
-        raise ConnectionError(resp.split(b"\r\n")[0].decode())
-    return s
-
-def ws_send(s, text):
-    data, mask = text.encode(), os.urandom(4)
-    n = len(data)
-    head = bytes([0x81]) + (bytes([0x80 | n]) if n < 126 else bytes([0x80 | 126]) + struct.pack(">H", n))
-    s.sendall(head + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
-
-def recv_exact(s, n):
-    buf = b""
-    while len(buf) < n:
-        chunk = s.recv(n - len(buf))
-        if not chunk:
-            raise ConnectionError("closed")
-        buf += chunk
-    return buf
-
-def ws_recv(s):
-    b1, b2 = recv_exact(s, 2)
-    n = b2 & 0x7F
-    if n == 126:
-        n = struct.unpack(">H", recv_exact(s, 2))[0]
-    elif n == 127:
-        n = struct.unpack(">Q", recv_exact(s, 8))[0]
-    payload = recv_exact(s, n)
-    return b1 & 0x0F, payload
+# tls with the pin, the websocket client and signing in are shared with virtual_agents.py
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ciproto import Dashboard, Agent, KeyStore, Refused, pin_from_args, join_key_from_args, BUILD
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8080)
+    ap.add_argument("--pin", help="the server's agent pin (default: read build/server.crt)")
+    ap.add_argument("--pin-file", help="server.crt to take the pin from")
+    ap.add_argument("--join-key", help="the server's join key (default: read build/agents.json)")
+    ap.add_argument("--join-key-file", help="agents.json to take the join key from")
+    ap.add_argument("--http-port", type=int, default=8081)
+    ap.add_argument("--password", default=os.environ.get("CI_TEACHER_PASSWORD"),
+                    help="teacher password, to read the snapshots (or set CI_TEACHER_PASSWORD)")
+    ap.add_argument("--key-file", default=os.path.join(BUILD, "baseline_test.keys.json"),
+                    help="where the test pcs keep their own keys")
     ap.add_argument("--jump-at", type=int, default=900, help="seconds of normal traffic before JUMP-C jumps")
     ap.add_argument("--after", type=int, default=120, help="seconds to keep sending after the jump")
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--out", default="baseline_results.json")
     a = ap.parse_args()
+    pin = pin_from_args(a.pin, a.pin_file)
+    if not a.password:
+        sys.exit("The test reads the dashboard's snapshots: give the teacher password with --password or CI_TEACHER_PASSWORD.")
+    try:
+        dash = Dashboard(a.host, a.http_port, pin, a.password)
+    except Refused as e:
+        sys.exit(str(e))
+    store = KeyStore(a.key_file, pin)
+    join_key = join_key_from_args(a.join_key, a.join_key_file)
     rnd = random.Random(a.seed)
 
     events = {"NORM-A": [], "NORM-B": [], "JUMP-C": []}   # (seconds since start, abn list)
@@ -83,13 +56,17 @@ def main():
     stop = threading.Event()
 
     def watch():
-        d = ws_connect(a.host, a.port, "/dashboard")
-        last = {}
+        # the dashboard's own way: GET /snapshot (new about once a second), logged in
+        last, seen = {}, None
         while not stop.is_set():
-            op, payload = ws_recv(d)
-            if op != 1:
+            time.sleep(0.25)
+            try:
+                snap = dash.get_json("/snapshot")
+            except (OSError, ValueError):
                 continue
-            snap = json.loads(payload)
+            if snap.get("ts") == seen:
+                continue
+            seen = snap.get("ts")
             t = round(time.time() - start, 1)
             for m in snap.get("machines", []):
                 mid = m.get("id")
@@ -103,7 +80,20 @@ def main():
                     last[mid] = abn
     threading.Thread(target=watch, daemon=True).start()
 
-    conns = {k: ws_connect(a.host, a.port, "/agent") for k in events}
+    def agent(k, wait_s=10):
+        # retry while the server is still starting up
+        deadline = time.time() + wait_s
+        while True:
+            try:
+                return Agent(a.host, a.port, pin, k, store, join_key).connect()
+            except ConnectionRefusedError:
+                if time.time() > deadline:
+                    raise
+                time.sleep(0.5)
+    try:
+        conns = {k: agent(k) for k in events}
+    except Refused as e:
+        sys.exit(str(e))
     burst_left = 0
     total = a.jump_at + a.after
     sent = 0
@@ -121,9 +111,9 @@ def main():
                     burst_left -= 1
             if mid == "JUMP-C" and sec >= a.jump_at:
                 rx = max(0, rnd.gauss(2000, 150))
-            ws_send(c, json.dumps({"type": "metrics", "id": mid, "os": "test", "cpu": round(cpu, 1),
-                                   "ram": {"per": 40}, "disk": {"per": 50},
-                                   "net": {"rx_kbps": round(rx, 1), "tx_kbps": round(tx, 1)}}))
+            c.send({"type": "metrics", "id": mid, "os": "test", "cpu": round(cpu, 1),
+                    "ram": {"per": 40}, "disk": {"per": 50},
+                    "net": {"rx_kbps": round(rx, 1), "tx_kbps": round(tx, 1)}})
             sent += 1
         time.sleep(max(0, tick + 1 - time.time()))
     time.sleep(2)

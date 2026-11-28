@@ -12,8 +12,12 @@
 #include <vector>
 #include "netinfo.hpp"
 #include "history.hpp"
+#include "tlscert.hpp"
+#include "agentkeys.hpp"
+#include "auth.hpp"
+#include <ixwebsocket/IXHttp.h>
 
-namespace ix { class WebSocketServer; class HttpServer; }
+namespace ix { class WebSocketServer; class HttpServer; class WebSocket; }
 
 // latest numbers reported by one agent
 struct mah {
@@ -38,6 +42,8 @@ public:
   std::function<void(const std::vector<mah>&,int64_t)> on_tick;
   // history / baseline settings; read once, on the first start()
   hist_cfg hist;
+  // how old a pc's key may get before the server hands it a new one (it must be online)
+  int64_t rotate_ms=24LL*60*60*1000;
 
   core();
   ~core();
@@ -48,6 +54,9 @@ public:
   bool running() const {return run_;}
 
   netif net() const;
+  // what agents need to trust this server: the first 128 bits of the certificate's
+  // sha-256, e.g. "3fa2-91bc-…" (empty before the first start())
+  std::string pin() const;
   std::vector<mah> machines() const;
   int dash_count() const;
   int agent_count() const;
@@ -66,17 +75,40 @@ public:
   std::vector<std::string> abnormal(const std::string&id,int64_t now) const;
   bool learning(const std::string&id,int64_t now) const;
 
+  // joining: the key typed once on each new pc (empty before the first start())
+  std::string join_key() const;
+  std::string new_join_key();        // old one stops working for new pcs; joined pcs keep going
+  // forgets the pc's key and disconnects it: it must join again. false when it never joined.
+  bool revoke_key(const std::string&id);
+  bool joined(const std::string&id) const;
+
+  // teacher login (false / "not started" before the first start())
+  bool has_password() const;
+  // "" when set; else why ("too short", ...). who: for the audit log
+  std::string set_password(const std::string&pw,const std::string&who);
+
 private:
   void log(lvl l,const std::string&s);
-  void hmsg(const std::string&ip,const std::string&txt);
+  void hmsg(const std::string&ip,const std::string&id,const std::string&txt);
+  // an agent connection: hello / join / auth / rekey, then metrics (see README)
+  void agent_open(ix::WebSocket&ws);
+  void agent_msg(ix::WebSocket&ws,const std::string&ip,const std::string&txt);
+  void offer_rotation(ix::WebSocket&ws,const std::string&id);   // call without mu_
+  // tries: sign-in attempts on this connection; one that has not signed in after 10 s is closed
+  struct conn {std::string nonce,id; bool authed=false,rekeying=false; int64_t opened=0; int tries=0;};
+  std::map<const void*,conn> conns_;  // agent connections, guarded by mu_
+  std::unique_ptr<agent_keys> keys_;  // agents.json; has its own lock
+  std::unique_ptr<auth> auth_;        // auth.json, sessions, audit.log; has its own lock
+  ix::HttpResponsePtr http(ix::HttpRequestPtr rq,const std::string&ip);
   void loop();
 
   mutable std::mutex mu_;
   std::map<std::string,mah> mah_;
-  std::unordered_set<const void*> dash_;
   netif net_;
   std::unique_ptr<ix::WebSocketServer> wsr_;
   std::unique_ptr<ix::HttpServer> http_;
+  tls_id tls_;                       // server.crt / server.key next to the executable
+  std::string snap_;                 // newest snapshot JSON, for GET /snapshot; guarded by mu_
   std::unique_ptr<history> hist_;  // has its own lock; never call it while holding mu_
 
   // names, descriptions and removed computers, kept in machines.json next to the executable

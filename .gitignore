@@ -5,3 +5,5 @@ build-*/
 .cache/
 compile_commands.json
 history/
+.DS_Store
+__pycache__/

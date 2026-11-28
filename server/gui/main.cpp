@@ -3,6 +3,7 @@
 #define GL_SILENCE_DEPRECATION
 #include <algorithm>
 #include <cfloat>
+#include <cstring>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -245,18 +246,67 @@ static void draw_connect(app&a,const pal&p) {
     ImGui::TextDisabled("%s: %d",T(a,S_DASH_OPEN),a.srv.dash_count());
     if (n.net_ip.empty()) ImGui::TextColored(p.warn,"%s",T(a,S_NO_NETWORK));
     ImGui::Spacing();
-    std::string agent="ws://"+ip+":"+std::to_string(a.srv.ws_port)+"/agent";
-    std::string dash="http://"+ip+":"+std::to_string(a.srv.http_port);
+    // agents only need --host and the pin; the pin is what makes them trust this server
+    std::string agent=a.srv.pin();
+    std::string dash="https://"+ip+":"+std::to_string(a.srv.http_port);
     float avail=ImGui::GetContentRegionAvail().x;
     bool two=avail>760*a.scale;
+    // the teacher password, until it is set (it can also be set in the dashboard on this pc,
+    // or with server --set-password)
+    static char pw1[257],pw2[257];
+    static int pw_msg=-1;                      // string id of the last message, or -1
+    if (!a.srv.has_password()) {
+      ImGui::Spacing();
+      ImGui::TextColored(p.warn,"%s",T(a,S_PW_NOT_SET));
+      float fw=200*a.scale;
+      ImGui::SetNextItemWidth(fw);
+      ImGui::InputTextWithHint("###pw1",T(a,S_PW_NEW),pw1,sizeof pw1,ImGuiInputTextFlags_Password);
+      ImGui::SameLine();
+      ImGui::SetNextItemWidth(fw);
+      bool enter=ImGui::InputTextWithHint("###pw2",T(a,S_PW_AGAIN),pw2,sizeof pw2,ImGuiInputTextFlags_Password|ImGuiInputTextFlags_EnterReturnsTrue);
+      ImGui::SameLine();
+      if (primary_button(p,(std::string(T(a,S_PW_SET))+"###pwset").c_str())||enter) {
+        std::string s1(pw1),s2(pw2);
+        if (s1.size()<8) pw_msg=S_PW_SHORT;
+        else if (s1!=s2) pw_msg=S_PW_SAME;
+        else pw_msg=a.srv.set_password(s1,"server window").empty()?S_PW_DONE:S_PW_SHORT;
+        std::memset(pw1,0,sizeof pw1); std::memset(pw2,0,sizeof pw2);   // do not keep it around
+      }
+      if (pw_msg>=0&&pw_msg!=S_PW_DONE) ImGui::TextColored(p.crit,"%s",T(a,(sid)pw_msg));
+      ImGui::Spacing();
+    } else if (pw_msg==S_PW_DONE) {
+      ImGui::TextColored(p.ok,"%s",T(a,S_PW_DONE));
+    }
+    // join key: copy, or replace with a new one (asked first)
+    static bool ask_new_join=false;
+    auto join_row=[&]{
+      address_row(a,p,S_JOIN_KEY,S_JOIN_KEY_HINT,"join",a.srv.join_key(),false);
+      ImGui::SameLine();
+      if (ImGui::Button((std::string(T(a,S_NEW_JOIN))+"###newjoin_btn").c_str())) ask_new_join=true;
+    };
     if (two && ImGui::BeginTable("addr",2,ImGuiTableFlags_SizingStretchSame)) {
       ImGui::TableNextColumn(); address_row(a,p,S_AGENT_ADDR,S_AGENT_ADDR_HINT,"agent",agent,false);
       ImGui::TableNextColumn(); address_row(a,p,S_DASH_ADDR,S_DASH_ADDR_HINT,"dash",dash,true);
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn(); ImGui::Spacing(); join_row();
       ImGui::EndTable();
     } else {
       address_row(a,p,S_AGENT_ADDR,S_AGENT_ADDR_HINT,"agent",agent,false);
       ImGui::Spacing();
       address_row(a,p,S_DASH_ADDR,S_DASH_ADDR_HINT,"dash",dash,true);
+      ImGui::Spacing();
+      join_row();
+    }
+    if (ask_new_join) {ImGui::OpenPopup("###newjoin"); ask_new_join=false;}
+    if (ImGui::BeginPopupModal((std::string(T(a,S_NEW_JOIN_Q))+"###newjoin").c_str(),nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
+      ImGui::PushTextWrapPos(420*a.scale);
+      ImGui::TextUnformatted(T(a,S_NEW_JOIN_BODY));
+      ImGui::PopTextWrapPos();
+      ImGui::Spacing();
+      if (ImGui::Button((std::string(T(a,S_CANCEL))+"###nj_no").c_str())) ImGui::CloseCurrentPopup();
+      ImGui::SameLine();
+      if (primary_button(p,(std::string(T(a,S_NEW_JOIN))+"###nj_yes").c_str())) {a.srv.new_join_key(); ImGui::CloseCurrentPopup();}
+      ImGui::EndPopup();
     }
   }
   ImGui::EndChild();
@@ -333,7 +383,7 @@ static void draw_machines(app&a,const pal&p,float height) {
 #else
       "./agent"
 #endif
-      )+" --host "+(n.net_ip.empty()?"127.0.0.1":n.net_ip);
+      )+" --host "+(n.net_ip.empty()?"127.0.0.1":n.net_ip)+" --pin "+a.srv.pin()+" --join-key "+a.srv.join_key();
     ImGui::PushFont(a.title);
     centered_note(p,cmd.c_str(),p.accent);
     ImGui::PopFont();

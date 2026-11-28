@@ -1,16 +1,65 @@
 cmake_minimum_required(VERSION 3.16)
-project(ComputerInspector CXX)
+project(ComputerInspector C CXX)   # C: mbedTLS is written in C
 include(FetchContent)
-set(USE_TLS  OFF CACHE BOOL "" FORCE)
-set(USE_ZLIB OFF CACHE BOOL "" FORCE)
-set(USE_TEST OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
+# TLS (wss:// for agents, https:// for the dashboard) through mbedTLS 3.6 LTS (Apache-2.0),
+# downloaded and built with the project, so no system OpenSSL is needed on any OS.
+set(ENABLE_TESTING  OFF CACHE BOOL "" FORCE)
+set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
+set(GEN_FILES       OFF CACHE BOOL "" FORCE)   # the release archive already has them
+set(MBEDTLS_FATAL_WARNINGS     OFF CACHE BOOL "" FORCE)
+set(USE_STATIC_MBEDTLS_LIBRARY ON  CACHE BOOL "" FORCE)
+set(USE_SHARED_MBEDTLS_LIBRARY OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(mbedtls
+  URL      https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.2/mbedtls-3.6.2.tar.bz2
+  URL_HASH SHA256=8b54fb9bcf4d5a7078028e0520acddefb7900b3e66fec7f7175bb5b7d85ccdca
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+# thread-safe mbedtls (every connection has its own thread): common/mbedtls_user_config.h
+set(MBEDTLS_USER_CONFIG_FILE "${CMAKE_SOURCE_DIR}/common/mbedtls_user_config.h" CACHE FILEPATH "" FORCE)
+if (NOT MSVC)
+  set(LINK_WITH_PTHREAD ON CACHE BOOL "" FORCE)
+endif()
+FetchContent_MakeAvailable(mbedtls)
+# zero the complete mac operation: its union initializer does not initialize the
+# inactive hmac context, which can leave a garbage psa hash operation id
+set(_mbedtls_mac_source "${mbedtls_SOURCE_DIR}/library/psa_crypto_mac.c")
+file(READ "${_mbedtls_mac_source}" _mbedtls_mac_contents)
+if (_mbedtls_mac_contents MATCHES "mbedtls_psa_mac_operation_t operation = MBEDTLS_PSA_MAC_OPERATION_INIT;")
+  string(REPLACE
+    "mbedtls_psa_mac_operation_t operation = MBEDTLS_PSA_MAC_OPERATION_INIT;"
+    "mbedtls_psa_mac_operation_t operation;\n    memset(&operation, 0, sizeof(operation));"
+    _mbedtls_mac_contents "${_mbedtls_mac_contents}")
+  file(WRITE "${_mbedtls_mac_source}" "${_mbedtls_mac_contents}")
+elseif (NOT _mbedtls_mac_contents MATCHES "memset\\(&operation, 0, sizeof\\(operation\\)\\)")
+  message(FATAL_ERROR "could not apply the mbedtls psa mac context initialization fix")
+endif()
+set(MBEDTLS_LIBS mbedtls mbedx509 mbedcrypto)
+if (MSVC)
+  # mbedtls/threading.h includes "threading_alt.h" (windows critical sections)
+  foreach (t ${MBEDTLS_LIBS})
+    target_include_directories(${t} PUBLIC ${CMAKE_SOURCE_DIR}/common)
+  endforeach()
+endif()
+
+# IXWebSocket with TLS through that mbedTLS (also on macOS, where it would pick SecureTransport)
+set(USE_TLS      ON  CACHE BOOL "" FORCE)
+set(USE_MBED_TLS ON  CACHE BOOL "" FORCE)
+set(USE_ZLIB     OFF CACHE BOOL "" FORCE)
+set(USE_TEST     OFF CACHE BOOL "" FORCE)
+set(IXWEBSOCKET_INSTALL OFF CACHE BOOL "" FORCE)        # nothing here is installed
+set(MBEDTLS_FOUND TRUE)                                  # skip IXWebSocket's find_package
+set(MBEDTLS_INCLUDE_DIRS ${mbedtls_SOURCE_DIR}/include)
+set(MBEDTLS_LIBRARIES ${MBEDTLS_LIBS})
 FetchContent_Declare(ixwebsocket
   GIT_REPOSITORY https://github.com/machinezone/IXWebSocket.git
   GIT_TAG        v11.4.5
   GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(ixwebsocket)
+# set by IXWebSocket's find_package path, which is skipped above
+target_compile_definitions(ixwebsocket PRIVATE IXWEBSOCKET_USE_MBED_TLS_MIN_VERSION_3)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -41,9 +90,14 @@ endif()
 add_executable(agent
   agent/main.cpp
   agent/metric.cpp
+  agent/pin.cpp
+  agent/keystore.cpp
+  common/tlspin.cpp
+  common/keys.cpp
+  common/exedir.cpp
   ${AGENT_PLATFORM}
 )
-target_link_libraries(agent PRIVATE ixwebsocket)
+target_link_libraries(agent PRIVATE ixwebsocket ${MBEDTLS_LIBS})
 target_include_directories(agent PRIVATE ${CMAKE_SOURCE_DIR})
 target_compile_options(agent PRIVATE ${WARN_FLAGS})
 if(WIN32)
@@ -54,10 +108,15 @@ add_executable(server
   server/main.cpp
   server/core.cpp
   server/history.cpp
-  server/exedir.cpp
+  common/exedir.cpp
+  server/tlscert.cpp
+  server/agentkeys.cpp
+  server/auth.cpp
+  common/tlspin.cpp
+  common/keys.cpp
   ${SERVER_PLATFORM}
 )
-target_link_libraries(server PRIVATE ixwebsocket)
+target_link_libraries(server PRIVATE ixwebsocket ${MBEDTLS_LIBS})
 target_include_directories(server PRIVATE ${CMAKE_SOURCE_DIR})
 target_compile_options(server PRIVATE ${WARN_FLAGS})
 if(WIN32)
@@ -127,7 +186,12 @@ if (SERVER_GUI)
     server/gui/main.cpp
     server/core.cpp
     server/history.cpp
-    server/exedir.cpp
+    common/exedir.cpp
+    server/tlscert.cpp
+    server/agentkeys.cpp
+    server/auth.cpp
+    common/tlspin.cpp
+    common/keys.cpp
     ${SERVER_PLATFORM}
     ${FONT_CPP}
     ${imgui_SOURCE_DIR}/imgui.cpp
@@ -138,7 +202,7 @@ if (SERVER_GUI)
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
   )
   target_include_directories(server_gui PRIVATE ${CMAKE_SOURCE_DIR} ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
-  target_link_libraries(server_gui PRIVATE ixwebsocket glfw OpenGL::GL)
+  target_link_libraries(server_gui PRIVATE ixwebsocket glfw OpenGL::GL ${MBEDTLS_LIBS})
   if (WIN32)
     target_link_libraries(server_gui PRIVATE iphlpapi ws2_32 shell32)
     if (MSVC)
