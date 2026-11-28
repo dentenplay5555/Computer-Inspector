@@ -22,6 +22,19 @@ if (NOT MSVC)
   set(LINK_WITH_PTHREAD ON CACHE BOOL "" FORCE)
 endif()
 FetchContent_MakeAvailable(mbedtls)
+# zero the complete mac operation: its union initializer does not initialize the
+# inactive hmac context, which can leave a garbage psa hash operation id
+set(_mbedtls_mac_source "${mbedtls_SOURCE_DIR}/library/psa_crypto_mac.c")
+file(READ "${_mbedtls_mac_source}" _mbedtls_mac_contents)
+if (_mbedtls_mac_contents MATCHES "mbedtls_psa_mac_operation_t operation = MBEDTLS_PSA_MAC_OPERATION_INIT;")
+  string(REPLACE
+    "mbedtls_psa_mac_operation_t operation = MBEDTLS_PSA_MAC_OPERATION_INIT;"
+    "mbedtls_psa_mac_operation_t operation;\n    memset(&operation, 0, sizeof(operation));"
+    _mbedtls_mac_contents "${_mbedtls_mac_contents}")
+  file(WRITE "${_mbedtls_mac_source}" "${_mbedtls_mac_contents}")
+elseif (NOT _mbedtls_mac_contents MATCHES "memset\\(&operation, 0, sizeof\\(operation\\)\\)")
+  message(FATAL_ERROR "could not apply the mbedtls psa mac context initialization fix")
+endif()
 set(MBEDTLS_LIBS mbedtls mbedx509 mbedcrypto)
 if (MSVC)
   # mbedtls/threading.h includes "threading_alt.h" (windows critical sections)

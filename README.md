@@ -105,7 +105,9 @@ cmake --build build #<--target <server/agent> (This section is optional: default
 ```
 
 The first configure also downloads mbedTLS 3.6 (TLS for `wss://` and `https://`; checked
-against its published SHA-256), so no system OpenSSL is needed.
+against its published SHA-256), so no system OpenSSL is needed. CMake also clears the full
+PSA MAC context in mbedTLS 3.6.2, avoiding TLS 1.3 SHA-256 handshake failures from an
+uninitialized inactive union member on GCC/Linux.
 
 Targets: `agent`, `server` (console) and `server_gui` (window). Both servers use the same
 core, so they behave the same. Run either one from the repository root so it can find
